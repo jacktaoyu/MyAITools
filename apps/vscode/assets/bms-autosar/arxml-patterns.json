@@ -1,0 +1,38 @@
+{
+	"version": "1.0.0",
+	"description": "Reusable ARXML snippets for BMS AUTOSAR descriptors.",
+	"patterns": {
+		"sender_receiver_interface": {
+			"name": "SenderReceiverInterface",
+			"snippet": "<SENDER-RECEIVER-INTERFACE>\n  <SHORT-NAME>{{name}}</SHORT-NAME>\n  <DATA-ELEMENTS>\n    <VARIABLE-DATA-PROTOTYPE>\n      <SHORT-NAME>{{element_name}}</SHORT-NAME>\n      <TYPE-TREF DEST=\"APPLICATION-PRIMITIVE-DATA-TYPE\">{{data_type}}</TYPE-TREF>\n    </VARIABLE-DATA-PROTOTYPE>\n  </DATA-ELEMENTS>\n</SENDER-RECEIVER-INTERFACE>"
+		},
+		"client_server_interface": {
+			"name": "ClientServerInterface",
+			"snippet": "<CLIENT-SERVER-INTERFACE>\n  <SHORT-NAME>{{name}}</SHORT-NAME>\n  <OPERATIONS>\n    <CLIENT-SERVER-OPERATION>\n      <SHORT-NAME>{{operation_name}}</SHORT-NAME>\n      <ARGUMENTS>\n        <ARGUMENT-DATA-PROTOTYPE>\n          <SHORT-NAME>{{arg_name}}</SHORT-NAME>\n          <TYPE-TREF DEST=\"APPLICATION-PRIMITIVE-DATA-TYPE\">{{arg_type}}</TYPE-TREF>\n          <DIRECTION>{{direction}}</DIRECTION>\n        </ARGUMENT-DATA-PROTOTYPE>\n      </ARGUMENTS>\n    </CLIENT-SERVER-OPERATION>\n  </OPERATIONS>\n</CLIENT-SERVER-INTERFACE>"
+		},
+		"application_primitive_data_type": {
+			"name": "ApplicationPrimitiveDataType",
+			"snippet": "<APPLICATION-PRIMITIVE-DATA-TYPE>\n  <SHORT-NAME>{{name}}</SHORT-NAME>\n  <CATEGORY>VALUE</CATEGORY>\n</APPLICATION-PRIMITIVE-DATA-TYPE>"
+		},
+		"r_port_prototype": {
+			"name": "RPortPrototype",
+			"snippet": "<R-PORT-PROTOTYPE>\n  <SHORT-NAME>{{name}}</SHORT-NAME>\n  <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">{{interface_path}}</REQUIRED-INTERFACE-TREF>\n</R-PORT-PROTOTYPE>"
+		},
+		"p_port_prototype": {
+			"name": "PPortPrototype",
+			"snippet": "<P-PORT-PROTOTYPE>\n  <SHORT-NAME>{{name}}</SHORT-NAME>\n  <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">{{interface_path}}</PROVIDED-INTERFACE-TREF>\n</P-PORT-PROTOTYPE>"
+		},
+		"timing_event": {
+			"name": "TimingEvent",
+			"snippet": "<TIMING-EVENT>\n  <SHORT-NAME>TMT_{{runnable_name}}</SHORT-NAME>\n  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">{{behavior_path}}/{{runnable_name}}</START-ON-EVENT-REF>\n  <PERIOD>{{period}}</PERIOD>\n</TIMING-EVENT>"
+		},
+		"runnable_entity": {
+			"name": "RunnableEntity",
+			"snippet": "<RUNNABLE-ENTITY>\n  <SHORT-NAME>{{name}}</SHORT-NAME>\n  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n  <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>\n</RUNNABLE-ENTITY>"
+		},
+		"swc_internal_behavior": {
+			"name": "SwcInternalBehavior",
+			"snippet": "<SWC-INTERNAL-BEHAVIOR>\n  <SHORT-NAME>{{name}}Behavior</SHORT-NAME>\n  <RUNNABLES>\n  </RUNNABLES>\n  <EVENTS>\n  </EVENTS>\n</SWC-INTERNAL-BEHAVIOR>"
+		}
+	}
+}

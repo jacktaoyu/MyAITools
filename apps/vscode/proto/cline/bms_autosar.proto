@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package cline;
+
+import "cline/common.proto";
+
+option go_package = "github.com/cline/grpc-go/cline";
+option java_multiple_files = true;
+option java_package = "bot.cline.proto";
+
+// Service for BMS AUTOSAR generation with structured progress events.
+service BmsAutosarService {
+  // Starts a generation task and streams progress back to the client.
+  rpc generateBmsAutosar(GenerateBmsAutosarRequest) returns (stream BmsAutosarProgressEvent);
+
+  // Cancels the currently running BMS AUTOSAR generation task.
+  rpc cancelBmsAutosarGeneration(EmptyRequest) returns (Empty);
+}
+
+// Request to start a BMS AUTOSAR generation task.
+message GenerateBmsAutosarRequest {
+  Metadata metadata = 1;
+  string component_type = 2;
+  string component_name = 3;
+  string output_format = 4;
+  string requirements = 5;
+  string ports_json = 6;
+  string runnables_json = 7;
+  // Fully-built prompt that will be sent to the task runtime.
+  string prompt = 8;
+}
+
+// Progress event emitted during BMS AUTOSAR generation.
+message BmsAutosarProgressEvent {
+  string stage = 1;
+  string message = 2;
+  int32 percent_complete = 3;
+  bool is_complete = 4;
+  string error = 5;
+}

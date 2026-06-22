@@ -1,0 +1,7 @@
+[
+	{
+		"path": "build/assets/index.js",
+		"limit": "2 MB",
+		"gzip": true
+	}
+]

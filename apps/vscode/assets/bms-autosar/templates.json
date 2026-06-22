@@ -1,0 +1,371 @@
+{
+	"version": "3.0.0",
+	"description": "Built-in data-driven templates for BMS AUTOSAR code generation in Cline.",
+	"templates": {
+		"swc": {
+			"component_type": "swc",
+			"default_ports": [
+				{
+					"name": "CellVoltage",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "Adc_VoltageType"
+				},
+				{
+					"name": "CellTemperature",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "Temperature_DegCType"
+				},
+				{
+					"name": "StateOfCharge",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "Percent_Type"
+				},
+				{
+					"name": "StateOfHealth",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "Percent_Type"
+				},
+				{
+					"name": "DiagnosisRequest",
+					"interface_type": "C/S",
+					"direction": "provided",
+					"data_type": "Diag_RequestType"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run10ms",
+					"event": "TimingEvent",
+					"period_ms": 10
+				},
+				{
+					"name": "Run100ms",
+					"event": "TimingEvent",
+					"period_ms": 100
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief AUTOSAR Application Software Component header for ${ComponentName}.\n *  \\version 1.0.0\n *  \\copyright Copyright (c) ${WorkspaceName}\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief AUTOSAR Application Software Component implementation for ${ComponentName}.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if ports}}    /* RTE I/O placeholders */\n{{#each ports}}{{#if direction_required}}    /* ${data_type} ${name}_value = 0u; */\n    /* (void)Rte_Read_${name}_Value(&${name}_value); */\n{{else}}    /* Rte_Write_${name}_Value((${data_type})0u); */\n{{/if}}{{/each}}{{/if}}    /* TODO: implement BMS logic */\n}\n\n{{/each}}#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\"",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>uint8</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n          <SW-DATA-DEF-PROPS>\n            <COMPU-METHODS>\n              <COMPU-METHOD>\n                <SHORT-NAME>uint8_CompuMethod</SHORT-NAME>\n                <CATEGORY>IDENTICAL</CATEGORY>\n              </COMPU-METHOD>\n            </COMPU-METHODS>\n          </SW-DATA-DEF-PROPS>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>uint16</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>sint16</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>float32</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>boolean</SHORT-NAME>\n          <CATEGORY>BOOLEAN</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>Percent_Type</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>Adc_VoltageType</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>Temperature_DegCType</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>Diag_RequestType</SHORT-NAME>\n          <CATEGORY>STRUCTURE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}{{#if interface_sr}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{else}}        <CLIENT-SERVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <OPERATIONS>\n            <CLIENT-SERVER-OPERATION>\n              <SHORT-NAME>Request</SHORT-NAME>\n              <ARGUMENTS>\n                <ARGUMENT-DATA-PROTOTYPE>\n                  <SHORT-NAME>request</SHORT-NAME>\n                  <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n                  <DIRECTION>IN</DIRECTION>\n                </ARGUMENT-DATA-PROTOTYPE>\n              </ARGUMENTS>\n            </CLIENT-SERVER-OPERATION>\n          </OPERATIONS>\n        </CLIENT-SERVER-INTERFACE>\n{{/if}}{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <APPLICATION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"{{#if interface_sr}}SENDER-RECEIVER-INTERFACE{{/if}}{{#if interface_cs}}CLIENT-SERVER-INTERFACE{{/if}}\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"{{#if interface_sr}}SENDER-RECEIVER-INTERFACE{{/if}}{{#if interface_cs}}CLIENT-SERVER-INTERFACE{{/if}}\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}Behavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>${name}_TimingEvent</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}Behavior/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{#if event_DataReceivedEvent}}                <DATA-RECEIVED-EVENT>\n                  <SHORT-NAME>${name}_DataReceivedEvent</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}Behavior/${name}</START-ON-EVENT-REF>\n                  <DATA-RECEIVED-EVENT-REF DEST=\"VARIABLE-DATA-PROTOTYPE\">/${ComponentName}_Interfaces/${ComponentName}_${name}/Value</DATA-RECEIVED-EVENT-REF>\n                </DATA-RECEIVED-EVENT>\n{{/if}}{{#if event_OperationInvokedEvent}}                <OPERATION-INVOKED-EVENT>\n                  <SHORT-NAME>${name}_OperationInvokedEvent</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}Behavior/${name}</START-ON-EVENT-REF>\n                  <OPERATION-IREF>\n                    <CONTEXT-P-PORT-REF DEST=\"P-PORT-PROTOTYPE\">/${ComponentName}/${name}</CONTEXT-P-PORT-REF>\n                    <TARGET-PROVIDED-OPERATION-REF DEST=\"CLIENT-SERVER-OPERATION\">/${ComponentName}_Interfaces/${ComponentName}_${name}/Request</TARGET-PROVIDED-OPERATION-REF>\n                  </OPERATION-IREF>\n                </OPERATION-INVOKED-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </APPLICATION-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bsw_module": {
+			"component_type": "bsw_module",
+			"default_ports": [],
+			"default_runnables": [
+				{
+					"name": "Init",
+					"event": "OperationInvokedEvent"
+				},
+				{
+					"name": "MainFunction",
+					"event": "TimingEvent",
+					"period_ms": 10
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief AUTOSAR Basic Software module header for ${ComponentName}.\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}{{#if event_OperationInvokedEvent}}Std_ReturnType {{/if}}{{#unless event_OperationInvokedEvent}}void {{/unless}}${ComponentName}_${name}(void);\n{{/each}}\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief AUTOSAR Basic Software module implementation for ${ComponentName}.\n */\n#include \"${ComponentName}.h\"\n#include \"Det.h\"\n#include \"${ComponentName}_Cfg.h\"\n#include \"${ComponentName}_Lcfg.h\"\n#include \"${ComponentName}_PBcfg.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}{{#if event_OperationInvokedEvent}}Std_ReturnType {{/if}}{{#unless event_OperationInvokedEvent}}void {{/unless}}${ComponentName}_${name}(void)\n{\n{{#if event_OperationInvokedEvent}}    /* TODO: initialize module state and validate configuration */\n    return E_OK;\n{{else}}    /* TODO: periodic BSW logic */\n{{/if}}}\n\n{{/each}}#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\"",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <BSW-MODULE-DESCRIPTION>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <MODULE-ID>MODULE_ID_${COMPONENT_NAME}</MODULE-ID>\n          <PROVIDED-ENTRYS>\n{{#each runnables}}            <BSW-MODULE-ENTRY>\n              <SHORT-NAME>${name}</SHORT-NAME>\n            </BSW-MODULE-ENTRY>\n{{/each}}          </PROVIDED-ENTRYS>\n        </BSW-MODULE-DESCRIPTION>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"rte_interface": {
+			"component_type": "rte_interface",
+			"default_ports": [
+				{
+					"name": "Value",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint16"
+				}
+			],
+			"default_runnables": [],
+			"header_template": "/** \\file ${ComponentName}_Interface.h\n *  \\brief RTE interface header for ${ComponentName}.\n */\n#ifndef ${COMPONENT_NAME}_INTERFACE_H\n#define ${COMPONENT_NAME}_INTERFACE_H\n\n#include \"Std_Types.h\"\n\n{{#each ports}}{{#if interface_sr}}/* Sender/Receiver data element for ${name} */\ntypedef ${data_type} ${ComponentName}_${name}_Type;\n{{else}}/* Client/Server operation placeholder for ${name} */\n{{/if}}{{/each}}\n#endif /* ${COMPONENT_NAME}_INTERFACE_H */",
+			"c_template": "",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}{{#if interface_sr}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{else}}        <CLIENT-SERVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <OPERATIONS>\n            <CLIENT-SERVER-OPERATION>\n              <SHORT-NAME>Operation</SHORT-NAME>\n            </CLIENT-SERVER-OPERATION>\n          </OPERATIONS>\n        </CLIENT-SERVER-INTERFACE>\n{{/if}}{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"arxml_descriptor": {
+			"component_type": "arxml_descriptor",
+			"default_ports": [],
+			"default_runnables": [],
+			"header_template": "",
+			"c_template": "",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n{{#if ports}}        <!-- Ports populated from request -->\n{{#each ports}}{{#if direction_required}}        <R-PORT-PROTOTYPE>\n          <SHORT-NAME>${name}</SHORT-NAME>\n        </R-PORT-PROTOTYPE>\n{{else}}        <P-PORT-PROTOTYPE>\n          <SHORT-NAME>${name}</SHORT-NAME>\n        </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}{{/if}}{{#if runnables}}        <!-- Runnables populated from request -->\n{{#each runnables}}        <RUNNABLE-ENTITY>\n          <SHORT-NAME>${name}</SHORT-NAME>\n        </RUNNABLE-ENTITY>\n{{/each}}{{/if}}{{#unless ports}}{{#unless runnables}}        <!-- Add AUTOSAR elements here -->\n{{/unless}}{{/unless}}      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"service": {
+			"component_type": "service",
+			"default_ports": [
+				{
+					"name": "DiagnosticEvent",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint32"
+				},
+				{
+					"name": "DiagnosticRequest",
+					"interface_type": "C/S",
+					"direction": "required",
+					"data_type": "Diag_RequestType"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Init",
+					"event": "OperationInvokedEvent"
+				},
+				{
+					"name": "MainFunction",
+					"event": "TimingEvent",
+					"period_ms": 100
+				},
+				{
+					"name": "EventHandler",
+					"event": "DataReceivedEvent"
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief AUTOSAR Service SWC header for ${ComponentName}.\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n\n/* Diagnostic event report stub */\nStd_ReturnType ${ComponentName}_ReportEvent(uint16 EventId, uint8 EventStatus);\n\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief AUTOSAR Service SWC implementation for ${ComponentName}.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n#include \"Det.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if event_OperationInvokedEvent}}    /* TODO: initialize service state and DTC context */\n{{/if}}{{#if event_TimingEvent}}    /* TODO: periodic service background processing */\n{{/if}}{{#if event_DataReceivedEvent}}    /* TODO: handle diagnostic event notification */\n{{/if}}}\n\n{{/each}}Std_ReturnType ${ComponentName}_ReportEvent(uint16 EventId, uint8 EventStatus)\n{\n    (void)EventId;\n    (void)EventStatus;\n    /* TODO: report DTC to DEM */\n    return E_OK;\n}\n\n#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\"",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>uint8</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>uint16</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>uint32</SHORT-NAME>\n          <CATEGORY>VALUE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE>\n          <SHORT-NAME>Diag_RequestType</SHORT-NAME>\n          <CATEGORY>STRUCTURE</CATEGORY>\n        </IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}{{#if interface_sr}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{else}}        <CLIENT-SERVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <OPERATIONS>\n            <CLIENT-SERVER-OPERATION>\n              <SHORT-NAME>Request</SHORT-NAME>\n              <ARGUMENTS>\n                <ARGUMENT-DATA-PROTOTYPE>\n                  <SHORT-NAME>request</SHORT-NAME>\n                  <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n                  <DIRECTION>IN</DIRECTION>\n                </ARGUMENT-DATA-PROTOTYPE>\n              </ARGUMENTS>\n            </CLIENT-SERVER-OPERATION>\n          </OPERATIONS>\n        </CLIENT-SERVER-INTERFACE>\n{{/if}}{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <SERVICE-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"{{#if interface_sr}}SENDER-RECEIVER-INTERFACE{{/if}}{{#if interface_cs}}CLIENT-SERVER-INTERFACE{{/if}}\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"{{#if interface_sr}}SENDER-RECEIVER-INTERFACE{{/if}}{{#if interface_cs}}CLIENT-SERVER-INTERFACE{{/if}}\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}Behavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>${name}_TimingEvent</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}Behavior/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{#if event_DataReceivedEvent}}                <DATA-RECEIVED-EVENT>\n                  <SHORT-NAME>${name}_DataReceivedEvent</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}Behavior/${name}</START-ON-EVENT-REF>\n                  <DATA-RECEIVED-EVENT-REF DEST=\"VARIABLE-DATA-PROTOTYPE\">/${ComponentName}_Interfaces/${ComponentName}_${name}/Value</DATA-RECEIVED-EVENT-REF>\n                </DATA-RECEIVED-EVENT>\n{{/if}}{{#if event_OperationInvokedEvent}}                <OPERATION-INVOKED-EVENT>\n                  <SHORT-NAME>${name}_OperationInvokedEvent</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}Behavior/${name}</START-ON-EVENT-REF>\n                  <OPERATION-IREF>\n                    <CONTEXT-P-PORT-REF DEST=\"P-PORT-PROTOTYPE\">/${ComponentName}/${name}</CONTEXT-P-PORT-REF>\n                    <TARGET-PROVIDED-OPERATION-REF DEST=\"CLIENT-SERVER-OPERATION\">/${ComponentName}_Interfaces/${ComponentName}_${name}/Request</TARGET-PROVIDED-OPERATION-REF>\n                  </OPERATION-IREF>\n                </OPERATION-INVOKED-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </SERVICE-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"ecu_extract": {
+			"component_type": "ecu_extract",
+			"default_ports": [],
+			"default_runnables": [],
+			"header_template": "",
+			"c_template": "",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${CompositionName}</SHORT-NAME>\n      <ELEMENTS>\n        <COMPOSITION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${CompositionName}</SHORT-NAME>\n          <COMPONENTS>\n{{#each components}}            <SW-COMPONENT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <TYPE-TREF DEST=\"{{type}}\">${path}</TYPE-TREF>\n            </SW-COMPONENT-PROTOTYPE>\n{{/each}}          </COMPONENTS>\n        </COMPOSITION-SW-COMPONENT-TYPE>\n        <ROOT-SW-COMPOSITION-PROTOTYPE>\n          <SHORT-NAME>${CompositionName}_Root</SHORT-NAME>\n          <SOFTWARE-COMPOSITION-TREF DEST=\"COMPOSITION-SW-COMPONENT-TYPE\">/${CompositionName}/${CompositionName}</SOFTWARE-COMPOSITION-TREF>\n        </ROOT-SW-COMPOSITION-PROTOTYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bms_csc": {
+			"component_type": "bms_csc",
+			"default_ports": [
+				{
+					"name": "CellVoltage_Slave",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "Adc_VoltageType"
+				},
+				{
+					"name": "CellTemperature_Slave",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "Temperature_DegCType"
+				},
+				{
+					"name": "CellVoltageBus",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "Adc_VoltageType"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run10ms",
+					"event": "TimingEvent",
+					"period_ms": 10
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief BMS Cell Supervision Circuit (CSC/ASIC) interface SWC header.\n *  \\version 1.0.0\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief BMS Cell Supervision Circuit (CSC/ASIC) interface implementation.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if ports}}    /* Read raw cell voltages/temperatures from slave IC and publish to BMS bus */\n{{#each ports}}{{#if direction_required}}    /* ${data_type} ${name}_value = 0u; */\n    /* (void)Rte_Read_${name}_Value(&${name}_value); */\n{{else}}    /* Rte_Write_${name}_Value((${data_type})0u); */\n{{/if}}{{/each}}{{/if}}    /* TODO: parse AFE frame, detect open wire / fault */\n}\n\n{{/each}}#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\" ",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint8</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>sint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Adc_VoltageType</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Temperature_DegCType</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <APPLICATION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}_InternalBehavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>TiEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </APPLICATION-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bms_controller": {
+			"component_type": "bms_controller",
+			"default_ports": [
+				{
+					"name": "PackCurrent",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "sint16"
+				},
+				{
+					"name": "HvRequest",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "boolean"
+				},
+				{
+					"name": "ContactorControl",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint8"
+				},
+				{
+					"name": "PreChargeStatus",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint8"
+				},
+				{
+					"name": "BmsMode",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint8"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run10ms",
+					"event": "TimingEvent",
+					"period_ms": 10
+				},
+				{
+					"name": "Run100ms",
+					"event": "TimingEvent",
+					"period_ms": 100
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief BMS Controller SWC header (mode management, contactors, HV state machine).\n *  \\version 1.0.0\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\ntypedef enum {\n    ${COMPONENT_NAME}_MODE_INIT = 0u,\n    ${COMPONENT_NAME}_MODE_STANDBY,\n    ${COMPONENT_NAME}_MODE_PRECHARGE,\n    ${COMPONENT_NAME}_MODE_DRIVE,\n    ${COMPONENT_NAME}_MODE_FAULT\n} ${ComponentName}_ModeType;\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n\nStd_ReturnType ${ComponentName}_SetHvRequest(boolean Request);\n\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief BMS Controller implementation.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n#include \"Det.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\nstatic ${ComponentName}_ModeType ${ComponentName}_Mode = ${COMPONENT_NAME}_MODE_INIT;\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if event_TimingEvent}}{{#if ports}}    /* Mode manager inputs/outputs */\n{{#each ports}}{{#if direction_required}}    /* ${data_type} ${name}_value; */\n    /* (void)Rte_Read_${name}_Value(&${name}_value); */\n{{else}}    /* Rte_Write_${name}_Value((${data_type})0u); */\n{{/if}}{{/each}}{{/if}}    /* TODO: run HV state machine, contactor control, pre-charge sequencing */\n{{/if}}}\n\n{{/each}}Std_ReturnType ${ComponentName}_SetHvRequest(boolean Request)\n{\n    (void)Request;\n    /* TODO: validate request and transition mode */\n    return E_OK;\n}\n\n#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\" ",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint8</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>sint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>boolean</SHORT-NAME><CATEGORY>BOOLEAN</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <APPLICATION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}_InternalBehavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>TiEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </APPLICATION-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bms_balancer": {
+			"component_type": "bms_balancer",
+			"default_ports": [
+				{
+					"name": "CellVoltage",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "Adc_VoltageType"
+				},
+				{
+					"name": "BalanceCommand",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint16"
+				},
+				{
+					"name": "BalanceStatus",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint16"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run1s",
+					"event": "TimingEvent",
+					"period_ms": 1000
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief BMS Cell Balancer SWC header (passive/active balancing).\n *  \\version 1.0.0\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n\nStd_ReturnType ${ComponentName}_SetBalanceCommand(uint16 ChannelMask);\n\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief BMS Cell Balancer implementation.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if ports}}    /* Read cell voltages and compute balance duty cycles */\n{{#each ports}}{{#if direction_required}}    /* ${data_type} ${name}_values[CELL_COUNT] = {0u}; */\n    /* (void)Rte_Read_${name}_Values(${name}_values); */\n{{else}}    /* Rte_Write_${name}_Value((${data_type})0u); */\n{{/if}}{{/each}}{{/if}}    /* TODO: determine cells to balance, set PWM / gate drive */\n}\n\n{{/each}}Std_ReturnType ${ComponentName}_SetBalanceCommand(uint16 ChannelMask)\n{\n    /* Rte_Write_BalanceCommand_Value(ChannelMask); */\n    (void)ChannelMask;\n    return E_OK;\n}\n\n#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\" ",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint8</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Adc_VoltageType</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <APPLICATION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}_InternalBehavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>TiEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </APPLICATION-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bms_thermal_manager": {
+			"component_type": "bms_thermal_manager",
+			"default_ports": [
+				{
+					"name": "CellTemperature",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "Temperature_DegCType"
+				},
+				{
+					"name": "CoolingPwm",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint8"
+				},
+				{
+					"name": "HeatingPwm",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint8"
+				},
+				{
+					"name": "ThermalRunaway",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "boolean"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run100ms",
+					"event": "TimingEvent",
+					"period_ms": 100
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief BMS Thermal Manager SWC header.\n *  \\version 1.0.0\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n\nStd_ReturnType ${ComponentName}_SetCoolingPwm(uint8 DutyCycle);\nStd_ReturnType ${ComponentName}_SetHeatingPwm(uint8 DutyCycle);\n\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief BMS Thermal Manager implementation.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if ports}}    /* Evaluate pack temperature distribution and thermal faults */\n{{#each ports}}{{#if direction_required}}    /* ${data_type} ${name}_values[TEMP_SENSOR_COUNT] = {0}; */\n    /* (void)Rte_Read_${name}_Values(${name}_values); */\n{{else}}    /* Rte_Write_${name}_Value((${data_type})0u); */\n{{/if}}{{/each}}{{/if}}    /* TODO: thermal runaway detection, cooling/heating PWM control */\n}\n\n{{/each}}Std_ReturnType ${ComponentName}_SetCoolingPwm(uint8 DutyCycle)\n{\n    (void)DutyCycle;\n    /* Rte_Write_CoolingPwm_Value(DutyCycle); */\n    return E_OK;\n}\n\nStd_ReturnType ${ComponentName}_SetHeatingPwm(uint8 DutyCycle)\n{\n    (void)DutyCycle;\n    /* Rte_Write_HeatingPwm_Value(DutyCycle); */\n    return E_OK;\n}\n\n#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\" ",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint8</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>boolean</SHORT-NAME><CATEGORY>BOOLEAN</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Temperature_DegCType</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <APPLICATION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}_InternalBehavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>TiEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </APPLICATION-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bms_charger": {
+			"component_type": "bms_charger",
+			"default_ports": [
+				{
+					"name": "ChargerVoltage",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "uint16"
+				},
+				{
+					"name": "ChargerCurrent",
+					"interface_type": "S/R",
+					"direction": "required",
+					"data_type": "sint16"
+				},
+				{
+					"name": "ChargeRequest",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint16"
+				},
+				{
+					"name": "ChargeStatus",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint8"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run100ms",
+					"event": "TimingEvent",
+					"period_ms": 100
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief BMS Charger Interface SWC header (AC/DC, CC/CV control).\n *  \\version 1.0.0\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\ntypedef enum {\n    ${COMPONENT_NAME}_CHARGE_IDLE = 0u,\n    ${COMPONENT_NAME}_CHARGE_CC,\n    ${COMPONENT_NAME}_CHARGE_CV,\n    ${COMPONENT_NAME}_CHARGE_DONE,\n    ${COMPONENT_NAME}_CHARGE_FAULT\n} ${ComponentName}_ChargeStateType;\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n\nStd_ReturnType ${ComponentName}_SetChargeRequest(uint16 Voltage_mV, sint16 Current_mA);\n\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief BMS Charger Interface implementation.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\nstatic ${ComponentName}_ChargeStateType ${ComponentName}_ChargeState = ${COMPONENT_NAME}_CHARGE_IDLE;\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if ports}}    /* Charger inputs and outputs */\n{{#each ports}}{{#if direction_required}}    /* ${data_type} ${name}_value = 0; */\n    /* (void)Rte_Read_${name}_Value(&${name}_value); */\n{{else}}    /* Rte_Write_${name}_Value((${data_type})0u); */\n{{/if}}{{/each}}{{/if}}    /* TODO: CC/CV algorithm, charge state machine, safety checks */\n    (void)${ComponentName}_ChargeState;\n}\n\n{{/each}}Std_ReturnType ${ComponentName}_SetChargeRequest(uint16 Voltage_mV, sint16 Current_mA)\n{\n    (void)Voltage_mV;\n    (void)Current_mA;\n    /* TODO: validate and publish ChargeRequest */\n    return E_OK;\n}\n\n#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\" ",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint8</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>sint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <APPLICATION-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}_InternalBehavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>TiEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </APPLICATION-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		},
+		"bms_diagnosis": {
+			"component_type": "bms_diagnosis",
+			"default_ports": [
+				{
+					"name": "DiagnosticEvent",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint32"
+				},
+				{
+					"name": "DiagnosticRequest",
+					"interface_type": "C/S",
+					"direction": "required",
+					"data_type": "Diag_RequestType"
+				},
+				{
+					"name": "FaultStatus",
+					"interface_type": "S/R",
+					"direction": "provided",
+					"data_type": "uint16"
+				}
+			],
+			"default_runnables": [
+				{
+					"name": "Run10ms",
+					"event": "TimingEvent",
+					"period_ms": 10
+				},
+				{
+					"name": "EventHandler",
+					"event": "DataReceivedEvent"
+				}
+			],
+			"header_template": "/** \\file ${ComponentName}.h\n *  \\brief BMS Diagnosis / DTC Manager SWC header.\n *  \\version 1.0.0\n */\n#ifndef ${COMPONENT_NAME}_H\n#define ${COMPONENT_NAME}_H\n\n#include \"Std_Types.h\"\n#include \"Rte_${ComponentName}.h\"\n\n#define ${COMPONENT_NAME}_SW_MAJOR_VERSION (1u)\n#define ${COMPONENT_NAME}_SW_MINOR_VERSION (0u)\n#define ${COMPONENT_NAME}_SW_PATCH_VERSION (0u)\n\n{{#each runnables}}void ${ComponentName}_${name}(void);\n{{/each}}\n\nStd_ReturnType ${ComponentName}_ReportEvent(uint16 EventId, uint8 EventStatus);\nStd_ReturnType ${ComponentName}_ClearDtc(uint32 DtcCode);\n\n#endif /* ${COMPONENT_NAME}_H */",
+			"c_template": "/** \\file ${ComponentName}.c\n *  \\brief BMS Diagnosis / DTC Manager implementation.\n */\n#include \"${ComponentName}.h\"\n#include \"Rte_${ComponentName}.h\"\n#include \"Det.h\"\n\n#define ${COMPONENT_NAME}_START_SEC_CODE\n#include \"MemMap.h\"\n\n{{#each runnables}}void ${ComponentName}_${name}(void)\n{\n{{#if event_TimingEvent}}    /* TODO: periodic DTC debouncing and status update */\n{{/if}}{{#if event_DataReceivedEvent}}    /* TODO: handle diagnostic event notification / DEM callback */\n{{/if}}}\n\n{{/each}}Std_ReturnType ${ComponentName}_ReportEvent(uint16 EventId, uint8 EventStatus)\n{\n    (void)EventId;\n    (void)EventStatus;\n    /* Rte_Write_DiagnosticEvent_Value(...); */\n    return E_OK;\n}\n\nStd_ReturnType ${ComponentName}_ClearDtc(uint32 DtcCode)\n{\n    (void)DtcCode;\n    /* TODO: clear DTC, validate security */\n    return E_OK;\n}\n\n#define ${COMPONENT_NAME}_STOP_SEC_CODE\n#include \"MemMap.h\" ",
+			"arxml_template": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00049.xsd\">\n  <ADMIN-DATA/>\n  <AR-PACKAGES>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Types</SHORT-NAME>\n      <ELEMENTS>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint8</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint16</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>uint32</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n        <IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Diag_RequestType</SHORT-NAME><CATEGORY>STRUCTURE</CATEGORY></IMPLEMENTATION-DATA-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}_Interfaces</SHORT-NAME>\n      <ELEMENTS>\n{{#each ports}}{{#if interface_sr}}        <SENDER-RECEIVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <DATA-ELEMENTS>\n            <VARIABLE-DATA-PROTOTYPE>\n              <SHORT-NAME>Value</SHORT-NAME>\n              <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n            </VARIABLE-DATA-PROTOTYPE>\n          </DATA-ELEMENTS>\n        </SENDER-RECEIVER-INTERFACE>\n{{else}}        <CLIENT-SERVER-INTERFACE>\n          <SHORT-NAME>${ComponentName}_${name}</SHORT-NAME>\n          <OPERATIONS>\n            <CLIENT-SERVER-OPERATION>\n              <SHORT-NAME>Request</SHORT-NAME>\n              <ARGUMENTS>\n                <ARGUMENT-DATA-PROTOTYPE>\n                  <SHORT-NAME>request</SHORT-NAME>\n                  <TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/${ComponentName}_Types/${data_type}</TYPE-TREF>\n                </ARGUMENT-DATA-PROTOTYPE>\n              </ARGUMENTS>\n            </CLIENT-SERVER-OPERATION>\n          </OPERATIONS>\n        </CLIENT-SERVER-INTERFACE>\n{{/if}}{{/each}}      </ELEMENTS>\n    </AR-PACKAGE>\n    <AR-PACKAGE>\n      <SHORT-NAME>${ComponentName}</SHORT-NAME>\n      <ELEMENTS>\n        <SERVICE-SW-COMPONENT-TYPE>\n          <SHORT-NAME>${ComponentName}</SHORT-NAME>\n          <PORTS>\n{{#each ports}}{{#if direction_required}}{{#if interface_sr}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{else}}            <R-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <REQUIRED-INTERFACE-TREF DEST=\"CLIENT-SERVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</REQUIRED-INTERFACE-TREF>\n            </R-PORT-PROTOTYPE>\n{{/if}}{{else}}{{#if interface_sr}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"SENDER-RECEIVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{else}}            <P-PORT-PROTOTYPE>\n              <SHORT-NAME>${name}</SHORT-NAME>\n              <PROVIDED-INTERFACE-TREF DEST=\"CLIENT-SERVER-INTERFACE\">/${ComponentName}_Interfaces/${ComponentName}_${name}</PROVIDED-INTERFACE-TREF>\n            </P-PORT-PROTOTYPE>\n{{/if}}{{/if}}{{/each}}          </PORTS>\n          <INTERNAL-BEHAVIORS>\n            <SWC-INTERNAL-BEHAVIOR>\n              <SHORT-NAME>${ComponentName}_InternalBehavior</SHORT-NAME>\n              <RUNNABLES>\n{{#each runnables}}                <RUNNABLE-ENTITY>\n                  <SHORT-NAME>${name}</SHORT-NAME>\n                  <MINIMUM-START-INTERVAL>0</MINIMUM-START-INTERVAL>\n                </RUNNABLE-ENTITY>\n{{/each}}              </RUNNABLES>\n              <EVENTS>\n{{#each runnables}}{{#if event_TimingEvent}}                <TIMING-EVENT>\n                  <SHORT-NAME>TiEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                  <PERIOD>${period_s}</PERIOD>\n                </TIMING-EVENT>\n{{/if}}{{#if event_DataReceivedEvent}}                <DATA-RECEIVED-EVENT>\n                  <SHORT-NAME>DreEv_${name}</SHORT-NAME>\n                  <START-ON-EVENT-REF DEST=\"RUNNABLE-ENTITY\">/${ComponentName}/${ComponentName}/INTERNAL-BEHAVIORS/${ComponentName}_InternalBehavior/RUNNABLES/${name}</START-ON-EVENT-REF>\n                </DATA-RECEIVED-EVENT>\n{{/if}}{{/each}}              </EVENTS>\n            </SWC-INTERNAL-BEHAVIOR>\n          </INTERNAL-BEHAVIORS>\n        </SERVICE-SW-COMPONENT-TYPE>\n      </ELEMENTS>\n    </AR-PACKAGE>\n  </AR-PACKAGES>\n</AUTOSAR>"
+		}
+	}
+}
