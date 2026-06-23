@@ -8,13 +8,25 @@ option go_package = "github.com/cline/grpc-go/cline";
 option java_multiple_files = true;
 option java_package = "bot.cline.proto";
 
-// Service for BMS AUTOSAR generation with structured progress events.
+// Service for BMS AUTOSAR generation and compile/build integration with structured progress events.
 service BmsAutosarService {
   // Starts a generation task and streams progress back to the client.
   rpc generateBmsAutosar(GenerateBmsAutosarRequest) returns (stream BmsAutosarProgressEvent);
 
   // Cancels the currently running BMS AUTOSAR generation task.
   rpc cancelBmsAutosarGeneration(EmptyRequest) returns (Empty);
+
+  // Executes a BMS AUTOSAR compile/build profile in a terminal.
+  rpc compileBmsAutosar(CompileBmsAutosarRequest) returns (CompileBmsAutosarResponse);
+
+  // Lists available compile/build profiles (built-in + workspace/global).
+  rpc listBmsAutosarCompileProfiles(ListBmsAutosarCompileProfilesRequest) returns (BmsAutosarCompileProfilesList);
+
+  // Saves a user-defined compile/build profile.
+  rpc saveBmsAutosarCompileProfile(SaveBmsAutosarCompileProfileRequest) returns (String);
+
+  // Deletes a user-defined compile/build profile.
+  rpc deleteBmsAutosarCompileProfile(DeleteBmsAutosarCompileProfileRequest) returns (String);
 }
 
 // Request to start a BMS AUTOSAR generation task.
@@ -39,4 +51,55 @@ message BmsAutosarProgressEvent {
   int32 percent_complete = 3;
   bool is_complete = 4;
   string error = 5;
+}
+
+// Compile/build workflow type for BMS AUTOSAR.
+// "appl"  : run the make-like command from the <workspace>/appl directory.
+// "launch": run launch.bat in the workspace root, then run make.
+message BmsAutosarCompileProfile {
+  string id = 1;
+  string name = 2;
+  string workflow = 3;
+  // Optional command override. When empty, the handler builds a default command.
+  string command = 4;
+  // Working directory relative to the workspace root (e.g. "appl" or empty).
+  string working_dir_relative = 5;
+  // Parallel job count passed to -j (default 32).
+  int32 jobs = 6;
+  // True for built-in profiles that cannot be deleted.
+  bool is_builtin = 7;
+  // Scope: "workspace", "global", or empty for built-in profiles.
+  string scope = 8;
+}
+
+message CompileBmsAutosarRequest {
+  string profile_id = 1;
+  // Scope used when resolving a built-in profile that has also been saved by the user.
+  string scope = 2;
+}
+
+message CompileBmsAutosarResponse {
+  bool success = 1;
+  // The command that was sent to the terminal.
+  string command = 2;
+  string message = 3;
+}
+
+message ListBmsAutosarCompileProfilesRequest {
+  string scope = 1;
+}
+
+message BmsAutosarCompileProfilesList {
+  repeated BmsAutosarCompileProfile profiles = 1;
+  string last_selected_id = 2;
+}
+
+message SaveBmsAutosarCompileProfileRequest {
+  string scope = 1;
+  BmsAutosarCompileProfile profile = 2;
+}
+
+message DeleteBmsAutosarCompileProfileRequest {
+  string scope = 1;
+  string id = 2;
 }

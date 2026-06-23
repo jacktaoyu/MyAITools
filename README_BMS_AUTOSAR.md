@@ -113,6 +113,17 @@ Wizard 与批量配置均支持选择目标 ASIL 等级：
 - Wizard 中自动合并内置类型与用户模板；
 - 提供模板管理对话框，支持创建、列出、删除。
 
+### 2.8 编译构建集成
+
+在 Chat 工具栏打开 **BMS AUTOSAR Compile** 对话框，即可选择并运行编译配置：
+
+- **内置配置**：
+  - `Appl: m -j32` — 在 `<workspace>/appl` 目录执行 `m -j32`。
+  - `Root: launch.bat → make -j32` — 在 workspace 根目录执行 `launch.bat` 后再执行 `make -j32`。
+- **自定义配置**：支持新增、编辑、删除自定义 profile；可覆盖 workflow、工作目录、并发任务数（`-j`）、完整命令。
+- **配置持久化**：workspace 配置保存在 `<cwd>/.cline/bms-autosar/compile-profiles.json`，global 配置保存在 `~/.cline/bms-autosar/compile-profiles.json`。
+- **终端执行**：点击 **Run Compile** 后，会在 VS Code 集成终端中打开并执行对应命令，便于查看实时编译输出。
+
 ---
 
 ## 三、安装与运行

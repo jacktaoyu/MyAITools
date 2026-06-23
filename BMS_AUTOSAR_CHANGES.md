@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-06-22（第二十八次迭代 / 编译构建集成）
+
+### 新增功能
+
+- **BMS AUTOSAR 编译/构建集成**
+  - 扩展 `proto/cline/bms_autosar.proto`：
+    - 新增 `BmsAutosarCompileProfile` 描述编译配置（id、name、workflow、command、working_dir_relative、jobs、is_builtin、scope）。
+    - 新增 RPC：
+      - `compileBmsAutosar`：在 VS Code 集成终端执行选中配置。
+      - `listBmsAutosarCompileProfiles`：列出内置 + workspace/global 自定义配置。
+      - `saveBmsAutosarCompileProfile` / `deleteBmsAutosarCompileProfile`：管理自定义配置。
+  - 重新生成 gRPC 桩代码（`npm run protos`）。
+  - 新增 `src/core/task/tools/handlers/bms-autosar/BmsAutosarCompileProfileStorage.ts`：
+    - 内置两条工作流：
+      - `appl`：在 `<workspace>/appl` 目录执行 `m -j32`。
+      - `launch`：在 workspace 根目录先执行 `launch.bat`，再执行 `make -j32`。
+    - workspace 配置保存在 `<cwd>/.cline/bms-autosar/compile-profiles.json`，global 配置保存在 `~/.cline/bms-autosar/compile-profiles.json`。
+    - 支持保存/删除自定义配置、记录上次选中配置、合并 built-in / global / workspace 配置（workspace 优先级最高）。
+  - 新增 controller handlers：
+    - `src/core/controller/bmsAutosar/compileBmsAutosar.ts`：构造命令并调用 `HostProvider.workspace.executeCommandInTerminal` 打开终端执行。
+    - `src/core/controller/bmsAutosar/listBmsAutosarCompileProfiles.ts`
+    - `src/core/controller/bmsAutosar/saveBmsAutosarCompileProfile.ts`
+    - `src/core/controller/bmsAutosar/deleteBmsAutosarCompileProfile.ts`
+  - 新增 Webview UI：
+    - `webview-ui/src/components/chat/BmsAutosarCompileManager.tsx`：对话框形式选择 Scope、Profile，点击 **Run Compile** 启动构建；支持新增/编辑/删除自定义配置。
+    - `ChatTextArea.tsx` 工具栏新增扳手图标按钮，打开 BMS AUTOSAR 编译管理器。
+
+### 单元测试
+
+- 新增 `BmsAutosarCompileProfileStorage.test.ts`：覆盖内置配置加载、workspace/global 保存与隔离、删除、lastSelected 持久化、命令构建、目录计算。
+- 新增 `compileBmsAutosar.test.ts`：覆盖 appl / launch 内置配置执行、终端失败回退、未找到配置抛错、选中配置持久化。
+- 全量单元测试通过：`npm run test:unit` 共 **1671** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+
+---
+
 ## 2026-06-22（第二十七次迭代 / ASIL 等级支持）
 
 ### 新增功能

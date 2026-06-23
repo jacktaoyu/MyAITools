@@ -42,6 +42,7 @@ import {
 	validateSlashCommand,
 } from "@/utils/slash-commands"
 const BmsKnowledgeManager = lazy(() => import("@/components/chat/BmsKnowledgeManager"))
+const BmsAutosarCompileManager = lazy(() => import("@/components/chat/BmsAutosarCompileManager"))
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
 import ServersToggleModal from "./ServersToggleModal"
 
@@ -1597,6 +1598,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 							<Suspense fallback={null}>
 								<BmsKnowledgeManager />
+							</Suspense>
+
+							<Suspense fallback={null}>
+								<BmsAutosarCompileManager />
 							</Suspense>
 
 							<Tooltip>
