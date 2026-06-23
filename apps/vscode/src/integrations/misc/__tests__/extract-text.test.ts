@@ -80,4 +80,17 @@ describe("extractTextFromFolder", () => {
 			/Path is not a directory/,
 		)
 	})
+
+	it("extracts C source and header files", async () => {
+		await fs.writeFile(path.join(tempDir, "bms_cell.c"), "void BmsCell_Init(void) {\n    /* init */\n}")
+		await fs.writeFile(path.join(tempDir, "bms_cell.h"), "#ifndef BMS_CELL_H\n#define BMS_CELL_H\n#endif\n")
+
+		const result = await extractTextFromFolder(tempDir)
+
+		assert.ok(result.text.includes("--- File: bms_cell.c ---"))
+		assert.ok(result.text.includes("BmsCell_Init"))
+		assert.ok(result.text.includes("--- File: bms_cell.h ---"))
+		assert.ok(result.text.includes("BMS_CELL_H"))
+		assert.deepStrictEqual(result.files.sort(), ["bms_cell.c", "bms_cell.h"])
+	})
 })

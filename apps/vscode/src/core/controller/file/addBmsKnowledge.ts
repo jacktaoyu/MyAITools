@@ -9,7 +9,7 @@ import { HostProvider } from "@/hosts/host-provider";
 import { saveBmsKnowledgeContent } from "./bmsKnowledgeStorage";
 
 /**
- * Opens a file picker to select an Excel/Word/PDF/ARXML/etc. document, prompts for a
+ * Opens a file picker to select a document or source file, prompts for a
  * knowledge topic, extracts the text, and saves it to the workspace BMS AUTOSAR
  * knowledge base.
  */
@@ -24,7 +24,29 @@ export async function addBmsKnowledge(
 		canSelectMany: false,
 		openLabel: "Add to BMS Knowledge",
 		filters: {
-			files: ["xlsx", "xls", "docx", "pdf", "csv", "txt", "md", "arxml"],
+			files: [
+				"xlsx",
+				"xls",
+				"docx",
+				"pdf",
+				"csv",
+				"txt",
+				"md",
+				"arxml",
+				"c",
+				"h",
+				"cpp",
+				"hpp",
+				"cc",
+				"hh",
+				"json",
+				"yaml",
+				"yml",
+				"xml",
+				"py",
+				"js",
+				"ts",
+			],
 		},
 	});
 

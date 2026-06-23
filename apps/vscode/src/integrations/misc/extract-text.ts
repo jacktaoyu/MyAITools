@@ -214,8 +214,13 @@ async function extractTextFromExcel(filePath: string): Promise<string> {
 
 /**
  * Supported text-extractable file extensions for knowledge import.
+ *
+ * The default extraction path treats unknown extensions as plain text using
+ * encoding detection, so this list primarily controls which files are picked
+ * up during recursive folder imports.
  */
 export const KNOWLEDGE_IMPORT_EXTENSIONS = new Set([
+	// Documents
 	".xlsx",
 	".xls",
 	".docx",
@@ -223,8 +228,43 @@ export const KNOWLEDGE_IMPORT_EXTENSIONS = new Set([
 	".csv",
 	".txt",
 	".md",
+	// C/C++ source and headers (BMS / AUTOSAR generated and hand-written code)
+	".c",
+	".h",
+	".cpp",
+	".hpp",
+	".cc",
+	".hh",
+	".cxx",
+	".hxx",
+	// Web / TypeScript / JavaScript
+	".js",
+	".ts",
+	".jsx",
+	".tsx",
+	".html",
+	".htm",
+	".css",
+	".scss",
+	".less",
+	// Python / Shell
+	".py",
+	".sh",
+	".bash",
+	".zsh",
+	// Data / config
+	".json",
+	".yaml",
+	".yml",
+	".xml",
+	".toml",
+	".ini",
+	".cfg",
+	".conf",
+	// AUTOSAR / notebooks / logs
 	".arxml",
 	".ipynb",
+	".log",
 ])
 
 export interface ExtractTextFromFolderFailure {
