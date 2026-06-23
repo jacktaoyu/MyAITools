@@ -6,6 +6,9 @@ import { promisify } from "node:util"
 import { telemetryService } from "@/services/telemetry"
 import { runMisraChecks } from "../handlers/bms-autosar/BmsAutosarMisraChecker"
 import type { MisraIssue } from "../handlers/bms-autosar/BmsAutosarMisraChecker"
+import { inferAsilLevel, runAsilSafetyChecks } from "../handlers/bms-autosar/BmsAutosarAsilSafetyChecker"
+import type { AsilSafetyIssue } from "../handlers/bms-autosar/BmsAutosarAsilSafetyChecker"
+import type { AsilLevel } from "../handlers/bms-autosar/BmsAutosarAsil"
 import { upsertQualityReportFile } from "../handlers/bms-autosar/BmsAutosarQualityReportStore"
 import type { QualityReportIssue } from "../handlers/bms-autosar/BmsAutosarQualityReportStore"
 import { validateArxml, validateCHeader, validateCSource } from "./BmsAutosarValidationUtils"
@@ -274,6 +277,11 @@ export interface QualityGateOptions {
 	 * BMS AUTOSAR quality report for the webview Quality Report panel.
 	 */
 	cwd?: string
+	/**
+	 * Target ASIL level for ASIL-aware checks. If omitted, the ASIL level is
+	 * inferred from the file content when possible.
+	 */
+	asilLevel?: AsilLevel
 }
 
 /**
@@ -298,13 +306,17 @@ export async function runBmsAutosarQualityGates(
 		issues.push(...validateArxml(content).issues)
 		issues.push(...validateArxmlEnhanced(content).issues)
 	} else if (ext === ".h") {
-		issues.push(...validateCHeader(content).issues)
-		issues.push(...mapMisraIssues(runMisraChecks(relPath, content).issues))
+		const asilLevel = options.asilLevel ?? inferAsilLevelFromContent(content)
+		issues.push(...addCategory(validateCHeader(content).issues, "STRUCTURAL"))
+		issues.push(...mapMisraIssues(runMisraChecks(relPath, content, { asilLevel }).issues))
+		issues.push(...mapAsilIssues(runAsilSafetyChecks(content, asilLevel)))
 	} else if (ext === ".c") {
-		issues.push(...validateCSource(content).issues)
-		issues.push(...mapMisraIssues(runMisraChecks(relPath, content).issues))
+		const asilLevel = options.asilLevel ?? inferAsilLevelFromContent(content)
+		issues.push(...addCategory(validateCSource(content).issues, "STRUCTURAL"))
+		issues.push(...mapMisraIssues(runMisraChecks(relPath, content, { asilLevel }).issues))
+		issues.push(...mapAsilIssues(runAsilSafetyChecks(content, asilLevel)))
 		const compileResult = await compileCSmokeTest(relPath, content)
-		issues.push(...compileResult.issues)
+		issues.push(...addCategory(compileResult.issues, "COMPILE"))
 	}
 
 	if (options.cwd) {
@@ -314,6 +326,7 @@ export async function runBmsAutosarQualityGates(
 			issues.map((issue) => ({
 				severity: issue.severity,
 				message: issue.message,
+				category: issue.category,
 			})) as QualityReportIssue[],
 		)
 	}
@@ -325,5 +338,22 @@ function mapMisraIssues(misraIssues: MisraIssue[]): ValidationIssue[] {
 	return misraIssues.map((issue) => ({
 		severity: issue.severity,
 		message: `[MISRA ${issue.rule}] ${issue.message}${issue.line ? ` (line ${issue.line})` : ""}`,
+		category: "MISRA" as const,
 	}))
+}
+
+function mapAsilIssues(asilIssues: AsilSafetyIssue[]): ValidationIssue[] {
+	return asilIssues.map((issue) => ({
+		severity: issue.severity,
+		message: `[ASIL ${issue.rule}] ${issue.message}${issue.line ? ` (line ${issue.line})` : ""}`,
+		category: "ASIL" as const,
+	}))
+}
+
+function addCategory(sourceIssues: ValidationIssue[], category: ValidationIssue["category"]): ValidationIssue[] {
+	return sourceIssues.map((issue) => ({ ...issue, category: issue.category ?? category }))
+}
+
+function inferAsilLevelFromContent(content: string) {
+	return inferAsilLevel(content, "QM")
 }

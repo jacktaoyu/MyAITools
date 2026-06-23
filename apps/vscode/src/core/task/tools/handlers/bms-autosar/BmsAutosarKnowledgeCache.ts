@@ -7,6 +7,7 @@ import { createEmbedding, type EmbeddingResult, hashContent } from "./BmsAutosar
 import type { BmsAutosarKnowledgeFile, BmsAutosarKnowledgeSource } from "./BmsAutosarKnowledgeTypes"
 import type { ApiConfiguration } from "@shared/api"
 import type { BmsAutosarTemplates } from "./BmsAutosarTemplateRenderer"
+import type { ArxmlEdge, ArxmlGraph, ArxmlNode } from "./BmsAutosarKnowledgeGraph"
 
 interface TemplatesCacheEntry {
 	mtimeMs: number
@@ -30,6 +31,12 @@ export interface LexicalIndex {
 interface LexicalCacheEntry {
 	index: LexicalIndex
 	sourcesHash: string
+}
+
+export interface ArxmlGraphCacheEntry {
+	mtimeMs: number
+	nodes: ArxmlNode[]
+	edges: ArxmlEdge[]
 }
 
 const DEFAULT_MEMORY_LIMIT = 128
@@ -79,6 +86,7 @@ const templatesCache = new LRUCache<string, TemplatesCacheEntry>(DEFAULT_MEMORY_
 const knowledgeCache = new LRUCache<string, KnowledgeCacheEntry>(DEFAULT_MEMORY_LIMIT, DEFAULT_TTL_MS)
 const queryEmbeddingCache = new LRUCache<string, EmbeddingResult>(DEFAULT_MEMORY_LIMIT, DEFAULT_TTL_MS)
 const lexicalCache = new LRUCache<string, LexicalCacheEntry>(DEFAULT_MEMORY_LIMIT, DEFAULT_TTL_MS)
+const arxmlGraphCache = new LRUCache<string, ArxmlGraphCacheEntry>(DEFAULT_MEMORY_LIMIT, DEFAULT_TTL_MS)
 
 function getDiskCacheDir(): string {
 	return path.join(getClineHomePath(), "bms-autosar", "cache")
@@ -326,14 +334,66 @@ export async function findAndLoadTemplatesCached(
  * Invalidates cached entries. If a file path is provided, only that path is
  * cleared; otherwise the entire in-memory cache is reset.
  */
+function arxmlGraphCacheKey(filePath: string): string {
+	return `${hashContent(filePath)}.arxml-graph.json`
+}
+
+export async function loadArxmlGraphCached(filePath: string): Promise<ArxmlGraph | undefined> {
+	const stat = await fs.stat(filePath).catch(() => undefined)
+	if (!stat) {
+		arxmlGraphCache.delete(filePath)
+		return undefined
+	}
+
+	const memoryCached = arxmlGraphCache.get(filePath)
+	if (memoryCached && memoryCached.mtimeMs === stat.mtimeMs) {
+		return { nodes: new Map(memoryCached.nodes.map((n) => [n.id, n])), edges: memoryCached.edges }
+	}
+
+	try {
+		const dir = path.join(await ensureDiskCacheDir(), "arxml-graph")
+		await fs.mkdir(dir, { recursive: true })
+		const cachePath = path.join(dir, arxmlGraphCacheKey(filePath))
+		const raw = await fs.readFile(cachePath, "utf-8")
+		const parsed = JSON.parse(raw) as ArxmlGraphCacheEntry
+		if (parsed.mtimeMs === stat.mtimeMs && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
+			arxmlGraphCache.set(filePath, parsed)
+			return { nodes: new Map(parsed.nodes.map((n) => [n.id, n])), edges: parsed.edges }
+		}
+	} catch {
+		// Disk cache miss or corrupt; re-parse below.
+	}
+
+	return undefined
+}
+
+export async function saveArxmlGraphCached(filePath: string, mtimeMs: number, graph: ArxmlGraph): Promise<void> {
+	try {
+		const entry: ArxmlGraphCacheEntry = {
+			mtimeMs,
+			nodes: Array.from(graph.nodes.values()),
+			edges: graph.edges,
+		}
+		arxmlGraphCache.set(filePath, entry)
+		const dir = path.join(await ensureDiskCacheDir(), "arxml-graph")
+		await fs.mkdir(dir, { recursive: true })
+		const cachePath = path.join(dir, arxmlGraphCacheKey(filePath))
+		await fs.writeFile(cachePath, JSON.stringify(entry), "utf-8")
+	} catch {
+		// Disk cache is best-effort.
+	}
+}
+
 export function invalidateBmsAutosarKnowledgeCache(filePath?: string): void {
 	if (filePath) {
 		templatesCache.delete(filePath)
 		knowledgeCache.delete(filePath)
+		arxmlGraphCache.delete(filePath)
 	} else {
 		templatesCache.clear()
 		knowledgeCache.clear()
 		queryEmbeddingCache.clear()
 		lexicalCache.clear()
+		arxmlGraphCache.clear()
 	}
 }

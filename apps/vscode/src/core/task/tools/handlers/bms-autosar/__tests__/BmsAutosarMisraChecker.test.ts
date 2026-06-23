@@ -89,4 +89,40 @@ Std_ReturnType Bms_Test_Run(void);
 		const summary = formatMisraSummary(results)
 		assert.ok(summary.includes("Checked 2 file(s)"))
 	})
+
+	it("filters ASIL-specific rules by target ASIL level", () => {
+		const content = `
+Std_ReturnType Bms_Test_Cond(uint8 x) {
+    if (x == 0) {
+        return E_NOT_OK;
+    }
+    return E_OK;
+}
+`
+		const qmResult = runMisraChecks("Bms_Test.c", content, { asilLevel: "QM" })
+		assert.ok(!qmResult.issues.some((i) => i.rule === "SAFETY-EXIT"))
+		assert.ok(qmResult.issues.some((i) => i.rule === "R15.5"))
+
+		const asilDResult = runMisraChecks("Bms_Test.c", content, { asilLevel: "ASIL_D" })
+		assert.ok(asilDResult.issues.some((i) => i.rule === "SAFETY-EXIT"))
+		assert.ok(!asilDResult.issues.some((i) => i.rule === "R15.5"))
+	})
+
+	it("promotes advisory rules to errors under ASIL C/D", () => {
+		const content = `
+uint8 g_counter = 0u;
+void Bms_Test_Counter(void) {
+    g_counter++;
+}
+`
+		const asilBResult = runMisraChecks("Bms_Test.c", content, { asilLevel: "ASIL_B" })
+		const r8_9B = asilBResult.issues.find((i) => i.rule === "R8.9")
+		assert.ok(r8_9B)
+		assert.equal(r8_9B.severity, "warning")
+
+		const asilCResult = runMisraChecks("Bms_Test.c", content, { asilLevel: "ASIL_C" })
+		const r8_9C = asilCResult.issues.find((i) => i.rule === "R8.9")
+		assert.ok(r8_9C)
+		assert.equal(r8_9C.severity, "error")
+	})
 })

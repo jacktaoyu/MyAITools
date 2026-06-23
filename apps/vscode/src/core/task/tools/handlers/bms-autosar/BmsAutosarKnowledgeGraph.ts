@@ -1,3 +1,5 @@
+import { XMLParser } from "fast-xml-parser"
+
 /**
  * Lightweight AUTOSAR ARXML knowledge graph builder.
  *
@@ -204,7 +206,7 @@ function inferRelation(tag: string): ArxmlEdge["relation"] {
  * without pulling in a full XML DOM library. It focuses on the element types
  * most relevant for BMS AUTOSAR code generation.
  */
-export function buildArxmlKnowledgeGraph(content: string): ArxmlGraph {
+export function buildArxmlKnowledgeGraphRegex(content: string): ArxmlGraph {
 	const graph: ArxmlGraph = { nodes: new Map(), edges: [] }
 	if (!content || content.trim().length === 0) {
 		return graph
@@ -277,6 +279,14 @@ export function buildArxmlKnowledgeGraph(content: string): ArxmlGraph {
 }
 
 /**
+ * Build an ARXML knowledge graph. Uses the XML parser by default and falls back
+ * to the regex-based parser when XML parsing is unavailable or fails.
+ */
+export function buildArxmlKnowledgeGraph(content: string): ArxmlGraph {
+	return buildArxmlKnowledgeGraphFromXml(content)
+}
+
+/**
  * Resolve a TREF/REF path to a graph node id. When the referenced element is
  * present in the graph, its full path id is returned so edges connect actual
  * nodes. Otherwise a synthetic id is returned.
@@ -290,6 +300,152 @@ function resolveReferenceTarget(graph: ArxmlGraph, targetType: ArxmlNodeType, re
 		}
 	}
 	return `${targetType}:${targetName}`
+}
+
+interface XmlWalkState {
+	graph: ArxmlGraph
+	packageStack: string[]
+	nodeStack: ArxmlNode[]
+	pendingRefs: Array<{ sourceId: string; tagName: string; refPath: string; dest?: string }>
+}
+
+function getTextContent(children: unknown[]): string | undefined {
+	if (!Array.isArray(children)) return undefined
+	for (const child of children) {
+		if (child && typeof child === "object" && "#text" in child && typeof child["#text"] === "string") {
+			return child["#text"]
+		}
+	}
+	return undefined
+}
+
+function getShortName(children: unknown[]): string | undefined {
+	if (!Array.isArray(children)) return undefined
+	for (const child of children) {
+		if (!child || typeof child !== "object" || "#text" in child) continue
+		const tagName = Object.keys(child).find((key) => key !== ":@")
+		if (tagName === "SHORT-NAME") {
+			const text = getTextContent((child as Record<string, unknown>)[tagName] as unknown[])
+			if (text) return text
+		}
+	}
+	return undefined
+}
+
+function walkXmlAst(nodes: unknown[], state: XmlWalkState): void {
+	if (!Array.isArray(nodes)) return
+	for (const node of nodes) {
+		if (!node || typeof node !== "object") continue
+		if ("#text" in node) continue
+
+		const tagName = Object.keys(node).find((key) => key !== ":@")
+		if (!tagName) continue
+
+		const attrs = (node as Record<string, unknown>)[":@"] as Record<string, string> | undefined
+		const children = (node as Record<string, unknown>)[tagName] as unknown[] | undefined
+
+		if (tagName === "AR-PACKAGE") {
+			const shortName = getShortName(children ?? [])
+			let packageNode: ArxmlNode | undefined
+			if (shortName) {
+				const packagePath = state.packageStack.join("/")
+				const pathStr = packagePath ? `${packagePath}/${shortName}` : shortName
+				const id = `AR-PACKAGE:${pathStr}`
+				packageNode = state.graph.nodes.get(id)
+				if (!packageNode) {
+					packageNode = { id, type: "AR-PACKAGE", name: shortName, path: pathStr, packagePath }
+					state.graph.nodes.set(id, packageNode)
+				}
+				state.packageStack.push(shortName)
+			}
+			if (packageNode) {
+				addContainsEdgeFromStack(state, packageNode)
+				state.nodeStack.push(packageNode)
+			}
+			walkXmlAst(children ?? [], state)
+			if (packageNode) state.nodeStack.pop()
+			if (shortName) state.packageStack.pop()
+			continue
+		}
+
+		if (INTERESTING_TAGS.has(tagName)) {
+			const shortName = getShortName(children ?? [])
+			if (shortName) {
+				const childNode = ensureArxmlNode(state, NODE_TYPE_MAP[tagName], shortName)
+				addContainsEdgeFromStack(state, childNode)
+				state.nodeStack.push(childNode)
+				walkXmlAst(children ?? [], state)
+				state.nodeStack.pop()
+				continue
+			}
+		}
+
+		if (tagName.endsWith("-TREF") || tagName.endsWith("-REF")) {
+			const refPath = getTextContent(children ?? [])
+			if (refPath && state.nodeStack.length > 0) {
+				const sourceId = state.nodeStack[state.nodeStack.length - 1].id
+				state.pendingRefs.push({ sourceId, tagName, refPath, dest: attrs?.["@_DEST"] })
+			}
+			continue
+		}
+
+		walkXmlAst(children ?? [], state)
+	}
+}
+
+function ensureArxmlNode(state: XmlWalkState, nodeType: ArxmlNodeType, shortName: string): ArxmlNode {
+	const packagePath = state.packageStack.join("/")
+	const pathStr = packagePath ? `${packagePath}/${shortName}` : shortName
+	const id = `${nodeType}:${pathStr}`
+	const existing = state.graph.nodes.get(id)
+	if (existing) return existing
+	const newNode: ArxmlNode = { id, type: nodeType, name: shortName, path: pathStr, packagePath }
+	state.graph.nodes.set(id, newNode)
+	return newNode
+}
+
+function addContainsEdgeFromStack(state: XmlWalkState, childNode: ArxmlNode): void {
+	for (let i = state.nodeStack.length - 1; i >= 0; i--) {
+		const parent = state.nodeStack[i]
+		if (parent.id !== childNode.id) {
+			state.graph.edges.push({ source: parent.id, target: childNode.id, relation: "contains" })
+			break
+		}
+	}
+}
+
+/**
+ * Build an ARXML knowledge graph using a fast XML parser.
+ * Falls back to the regex-based parser if XML parsing fails.
+ */
+export function buildArxmlKnowledgeGraphFromXml(content: string): ArxmlGraph {
+	const graph: ArxmlGraph = { nodes: new Map(), edges: [] }
+	if (!content || content.trim().length === 0) {
+		return graph
+	}
+
+	try {
+		const parser = new XMLParser({
+			preserveOrder: true,
+			ignoreAttributes: false,
+			attributeNamePrefix: "@_",
+			textNodeName: "#text",
+		})
+		const ast = parser.parse(content)
+		if (!Array.isArray(ast)) {
+			return buildArxmlKnowledgeGraph(content)
+		}
+		const state: XmlWalkState = { graph, packageStack: [], nodeStack: [], pendingRefs: [] }
+		walkXmlAst(ast, state)
+		for (const { sourceId, tagName, refPath, dest } of state.pendingRefs) {
+			const targetType = inferRefTargetType(tagName, dest)
+			const targetId = resolveReferenceTarget(state.graph, targetType, refPath)
+			state.graph.edges.push({ source: sourceId, target: targetId, relation: inferRelation(tagName) })
+		}
+		return graph
+	} catch {
+		return buildArxmlKnowledgeGraphRegex(content)
+	}
 }
 
 /**

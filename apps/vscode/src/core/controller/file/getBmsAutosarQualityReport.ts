@@ -38,6 +38,7 @@ export async function getBmsAutosarQualityReport(
 						message: issue.message,
 						line: issue.line ?? 0,
 						rule: issue.rule ?? "",
+						category: issue.category ?? "",
 					}),
 				),
 			}),

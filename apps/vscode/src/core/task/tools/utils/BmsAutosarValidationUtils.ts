@@ -3,6 +3,7 @@ import path from "node:path"
 export interface ValidationIssue {
 	severity: "error" | "warning" | "info"
 	message: string
+	category?: "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
 }
 
 export interface ValidationResult {

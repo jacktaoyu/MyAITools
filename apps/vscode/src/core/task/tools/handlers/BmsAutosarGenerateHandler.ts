@@ -486,6 +486,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			runnables: enrichedRunnables,
 			components: components.length > 0 ? components : [],
 			asilLevel,
+			asil_level: asilLevel,
 			asil_label: asilLevel,
 			asil_QM: asilLevel === "QM",
 			asil_ASIL_A: asilLevel === "ASIL_A",
@@ -493,7 +494,11 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			asil_ASIL_C: asilLevel === "ASIL_C",
 			asil_ASIL_D: asilLevel === "ASIL_D",
 			asil_high: asilLevel === "ASIL_C" || asilLevel === "ASIL_D",
+			isHighAsil: asilLevel === "ASIL_C" || asilLevel === "ASIL_D",
 			asil_any: asilLevel !== "QM",
+			asil_A_or_higher: asilLevel !== "QM",
+			asil_B_or_higher: asilLevel === "ASIL_B" || asilLevel === "ASIL_C" || asilLevel === "ASIL_D",
+			asil_C_or_higher: asilLevel === "ASIL_C" || asilLevel === "ASIL_D",
 		}
 
 		const headerTemplate = template?.header_template || ""

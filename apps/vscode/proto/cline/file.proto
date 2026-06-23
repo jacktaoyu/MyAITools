@@ -490,6 +490,7 @@ message BmsAutosarQualityIssue {
   string message = 2;
   int32 line = 3;
   string rule = 4;
+  string category = 5; // "MISRA", "ASIL", "STRUCTURAL", "COMPILE"
 }
 
 // A file entry in the BMS AUTOSAR quality report.

@@ -4,6 +4,67 @@
 
 ---
 
+## 2026-06-23（第三十次迭代 / ASIL 等级支持深化与 ARXML 知识图谱优化）
+
+### 新增功能
+
+- **ASIL 感知的 MISRA 规则**
+  - `BmsAutosarMisraChecker.ts`：
+    - `MisraRule` 新增 `appliesTo?: AsilLevel[] | "all"`，允许规则按 ASIL 级别生效。
+    - `MisraCheckOptions` 新增 `asilLevel`，`runMisraChecks` 按 ASIL 过滤规则。
+    - ASIL C/D 下 `advisory` 规则自动提升为 `error`。
+    - 新增 `SAFETY-EXIT` 规则，强制高 ASIL 函数单一出口。
+    - 新增 `R8.9` 文件作用域对象启发式检查。
+
+- **ASIL 安全验证报告**
+  - 新增 `BmsAutosarAsilSafetyChecker.ts`：
+    - `inferAsilLevel` 从文件头 `\ASIL level:` 注释解析 ASIL。
+    - `runAsilSafetyChecks` 针对高 ASIL 检查 WdgM、E2E、DET、范围检查、单一出口等安全模式。
+  - `BmsAutosarQualityGates.ts`：
+    - `QualityGateOptions` 新增 `asilLevel`。
+    - `.c/.h` 文件同时运行 MISRA 检查与 ASIL 安全检查。
+    - 所有 issue 增加 `category` 字段（`MISRA` / `ASIL` / `STRUCTURAL` / `COMPILE`）。
+  - `WriteToFileToolHandler.ts`：保存文件前解析 ASIL 并传入质量门。
+
+- **模板 ASIL 条件块**
+  - `BmsAutosarGenerateHandler.ts` 上下文新增 `asil_level`、`isHighAsil`、`asil_A_or_higher`、`asil_B_or_higher`、`asil_C_or_higher`。
+  - `templates.json` 中 `swc` 与 `bms_csc` 的 C 模板扩展 ASIL-B+ / ASIL-C/D 安全占位注释。
+
+- **质量问题分类与 Webview 过滤**
+  - `proto/cline/file.proto`：`BmsAutosarQualityIssue` 新增 `category = 5`。
+  - `BmsAutosarQualityReportStore.ts`、`getBmsAutosarQualityReport.ts` 透传 `category`。
+  - `BmsAutosarQualityReportView.tsx` 与 `BmsAutosarQualityPanel.tsx` 新增 Category 过滤按钮（All / MISRA / ASIL / STRUCTURAL / COMPILE）。
+
+- **ARXML 知识图谱优化**
+  - `apps/vscode/package.json` 显式添加 `fast-xml-parser` 依赖。
+  - `BmsAutosarKnowledgeGraph.ts`：
+    - 新增基于 `fast-xml-parser` 的 `buildArxmlKnowledgeGraphFromXml`。
+    - 保留原 regex 解析作为 fallback，默认优先使用 XML 解析器。
+    - 解析结果与 regex 路径在现有测试 ARXML 上等价。
+  - `BmsAutosarKnowledgeCache.ts`：
+    - 新增 `loadArxmlGraphCached` / `saveArxmlGraphCached`。
+    - 按文件 `mtimeMs` 维护缓存，缓存目录 `~/.cline/bms-autosar/cache/arxml-graph/`。
+  - `getBmsAutosarKnowledgeGraph.ts`：
+    - 改为逐文件解析/缓存后合并 graph，避免重复解析大文件。
+  - Webview 图谱导出：
+    - 新增公共组件 `BmsAutosarKnowledgeGraphRenderer.tsx`，包含 `simpleForceLayout`、SVG 渲染、导出按钮。
+    - 支持 **Export SVG**（序列化当前 SVG）与 **Export Mermaid**（生成 `graph LR` 文本）。
+    - `BmsAutosarKnowledgeGraphView.tsx`（全屏/对话框两个入口）复用该组件，消除重复代码。
+
+### 单元测试
+
+- 更新 `BmsAutosarMisraChecker.test.ts`：覆盖 ASIL 规则过滤、advisory 提升为 error、`SAFETY-EXIT`。
+- 新增 `BmsAutosarAsilSafetyChecker.test.ts`：覆盖 ASIL 推断、WdgM/E2E/DET/范围检查/单一出口。
+- 更新 `BmsAutosarKnowledgeCache.test.ts`：覆盖 ARXML graph 缓存命中与 mtime 失效。
+- 全量单元测试通过：`npm run test:unit` 共 **1685** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`。
+
+---
+
 ## 2026-06-22（第二十九次迭代 / 编译构建集成优化与统一入口菜单）
 
 ### 新增功能

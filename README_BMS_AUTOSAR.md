@@ -64,7 +64,9 @@ Wizard 与批量配置均支持选择目标 ASIL 等级：
 
 - 在检索 query 中注入 `safety`、`asil` 等关键词，优先召回安全相关规范；
 - 在 LLM prompt 中附加对应 ASIL 的设计约束（如 ASIL C/D 要求防御性编程、单一出口、范围检查、WdgM 看门狗、E2E 保护、安全监控）；
-- 在模板上下文中暴露 `${AsilLevel}` / `${ASIL_LEVEL}` 变量，便于模板按等级输出条件代码片段。
+- 在模板上下文中暴露 `${AsilLevel}` / `${ASIL_LEVEL}` / `${isHighAsil}` / `${asil_B_or_higher}` 等变量，便于模板按等级输出条件代码片段；
+- 保存 `.c/.h` 文件时，质量门会按文件头 `\ASIL level:` 注释或生成参数运行 ASIL 安全专项检查，并产出带 `MISRA` / `ASIL` 分类的质量问题；
+- 在 BMS Quality Report 中可按分类（MISRA / ASIL / STRUCTURAL / COMPILE）筛选问题。
 
 ### 2.3 RAG 知识库增强检索
 
@@ -100,9 +102,10 @@ Wizard 与批量配置均支持选择目标 ASIL 等级：
 
 ### 2.6 ARXML 知识图谱
 
-- 解析 ARXML，提取 SWC、Port、Interface、Data Type、Runnable 等实体；
-- 构建节点-边关系网络；
-- Webview 交互式力导向图谱可视化；
+- 使用 `fast-xml-parser` 解析 ARXML，保留 regex 解析作为 fallback；
+- 提取 SWC、Port、Interface、Data Type、Runnable 等实体，构建节点-边关系网络；
+- 按文件 `mtime` 维护增量缓存，避免重复解析大文件；
+- Webview 交互式力导向图谱可视化，支持 **Export SVG** 和 **Export Mermaid**；
 - 检索阶段利用图谱邻近度提升相关性。
 
 ### 2.7 用户自定义模板
@@ -210,21 +213,22 @@ components:
 
 ### 4.5 查看质量报告与自动修复
 
-点击工具栏 **BMS Quality Report** 图标：
+在 Chat 工具栏的 **BMS AUTOSAR** 下拉菜单中选择 **Quality Report**：
 
-- 查看所有生成文件的 MISRA 检查结果；
-- 按 error / warning / info 分级；
+- 查看所有生成文件的质量检查结果（MISRA + ASIL + STRUCTURAL + COMPILE）；
+- 按 error / warning / info 与 category 筛选；
 - 点击文件名打开源码；
 - 点击 **Fix** 或 **Fix All** 预览 LLM 自动修复 diff；
 - 确认后应用修复并写盘。
 
 ### 4.6 查看 ARXML 知识图谱
 
-点击工具栏 **BMS Knowledge Graph** 图标：
+在 Chat 工具栏的 **BMS AUTOSAR** 下拉菜单中选择 **Knowledge Graph**：
 
 - 选择 workspace/global 作用域；
 - 选择要解析的 ARXML 文件；
-- 查看 SWC、Port、Interface 的交互式关系图。
+- 查看 SWC、Port、Interface 的交互式关系图；
+- 支持导出当前视图为 SVG 或 Mermaid 定义。
 
 ---
 

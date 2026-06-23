@@ -11,6 +11,7 @@ export interface QualityReportIssue {
 	message: string
 	line?: number
 	rule?: string
+	category?: "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
 }
 
 export interface QualityReportFile {

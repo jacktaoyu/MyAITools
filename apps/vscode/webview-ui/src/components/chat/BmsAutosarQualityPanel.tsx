@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import {
 	AutoFixBmsAutosarFileRequest,
 	AutoFixBmsAutosarFileResponse,
+	BmsAutosarQualityIssue,
 	BmsAutosarQualityReport,
 	BmsAutosarQualityReportFile,
 	BmsAutosarQualityReportRequest,
@@ -13,8 +14,10 @@ import { FileServiceClient } from "@/services/grpc-client"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type Severity = "error" | "warning" | "info"
+type Category = "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
 
 const severityOrder: Severity[] = ["error", "warning", "info"]
+const categories: Category[] = ["MISRA", "ASIL", "STRUCTURAL", "COMPILE"]
 
 const severityIcon = (severity: Severity) => {
 	switch (severity) {
@@ -44,6 +47,7 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 	const [loading, setLoading] = useState(false)
 	const [fixingFile, setFixingFile] = useState<string | null>(null)
 	const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
+	const [selectedCategory, setSelectedCategory] = useState<Category | "all">("all")
 	const [preview, setPreview] = useState<AutoFixBmsAutosarFileResponse | null>(null)
 
 	const fetchReport = useCallback(async () => {
@@ -112,10 +116,13 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 		}
 	}
 
-	const filteredFiles =
-		report?.files.filter((file) =>
-			selectedSeverity === "all" ? true : file.issues.some((issue) => issue.severity === selectedSeverity),
-		) || []
+	const matchesFilters = (issue: BmsAutosarQualityIssue) => {
+		const severityMatch = selectedSeverity === "all" || issue.severity === selectedSeverity
+		const categoryMatch = selectedCategory === "all" || issue.category === selectedCategory
+		return severityMatch && categoryMatch
+	}
+
+	const filteredFiles = report?.files.filter((file) => file.issues.some(matchesFilters)) || []
 
 	const totalIssues = report?.total ?? 0
 
@@ -145,7 +152,7 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 						</DialogDescription>
 					</DialogHeader>
 
-					<div className="flex items-center gap-2 mt-3">
+					<div className="flex items-center gap-2 mt-3 flex-wrap">
 						{(["all", ...severityOrder] as const).map((sev) => (
 							<button
 								key={sev}
@@ -156,6 +163,19 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 										: "bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
 								}`}>
 								{sev === "all" ? "All" : `${severityIcon(sev as Severity)} ${sev}`}
+							</button>
+						))}
+						<div className="w-px h-4 bg-[var(--vscode-panel-border)] mx-1" />
+						{(["all", ...categories] as const).map((cat) => (
+							<button
+								key={cat}
+								onClick={() => setSelectedCategory(cat)}
+								className={`text-xs px-2 py-1 rounded border ${
+									selectedCategory === cat
+										? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-transparent"
+										: "bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
+								}`}>
+								{cat === "all" ? "All" : cat}
 							</button>
 						))}
 						<div className="flex-1" />

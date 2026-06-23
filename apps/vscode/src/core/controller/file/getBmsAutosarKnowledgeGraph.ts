@@ -8,6 +8,10 @@ import {
 } from "@shared/proto/cline/file";
 import { getBmsKnowledgeDir } from "@core/controller/file/bmsKnowledgeStorage";
 import { buildArxmlKnowledgeGraph } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeGraph";
+import {
+	loadArxmlGraphCached,
+	saveArxmlGraphCached,
+} from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache";
 import type { BmsAutosarKnowledgeFile } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
 import { getCwd, getDesktopDir } from "@utils/path";
 import type { Controller } from "..";
@@ -47,18 +51,30 @@ export async function getBmsAutosarKnowledgeGraph(
 		}
 	}
 
-	const contents: string[] = [];
-	for (const filePath of arxmlPaths) {
-		try {
-			contents.push(await fs.readFile(filePath, "utf-8"));
-		} catch {
-			// Skip unreadable files.
-		}
-	}
+	const mergedGraph: import("@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeGraph").ArxmlGraph =
+		{
+			nodes: new Map(),
+			edges: [],
+		};
 
-	const graph = buildArxmlKnowledgeGraph(contents.join("\n"));
+	for (const filePath of arxmlPaths) {
+		const stat = await fs.stat(filePath).catch(() => undefined);
+		if (!stat) continue;
+
+		let graph = await loadArxmlGraphCached(filePath);
+		if (!graph) {
+			const content = await fs.readFile(filePath, "utf-8");
+			graph = buildArxmlKnowledgeGraph(content);
+			await saveArxmlGraphCached(filePath, stat.mtimeMs, graph);
+		}
+
+		for (const node of graph.nodes.values()) {
+			mergedGraph.nodes.set(node.id, node);
+		}
+		mergedGraph.edges.push(...graph.edges);
+	}
 	return BmsAutosarKnowledgeGraph.create({
-		nodes: Array.from(graph.nodes.values()).map((node) =>
+		nodes: Array.from(mergedGraph.nodes.values()).map((node) =>
 			BmsAutosarKnowledgeGraphNode.create({
 				id: node.id,
 				type: node.type,
@@ -67,7 +83,7 @@ export async function getBmsAutosarKnowledgeGraph(
 				packagePath: node.packagePath,
 			}),
 		),
-		edges: graph.edges.map((edge) =>
+		edges: mergedGraph.edges.map((edge) =>
 			BmsAutosarKnowledgeGraphEdge.create({
 				source: edge.source,
 				target: edge.target,

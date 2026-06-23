@@ -1,9 +1,11 @@
 import path from "node:path"
+import { isHighAsil, type AsilLevel } from "./BmsAutosarAsil"
 
 export interface MisraRule {
 	id: string
 	category: "required" | "advisory" | "mandatory"
 	description: string
+	appliesTo?: AsilLevel[] | "all"
 }
 
 export interface MisraIssue {
@@ -31,6 +33,11 @@ export interface MisraCheckOptions {
 	 * @default 31
 	 */
 	maxExternalIdentifierLength?: number
+	/**
+	 * Target ASIL level. Rules that do not apply to this ASIL are skipped,
+	 * and advisory rules are promoted to errors under ASIL C/D.
+	 */
+	asilLevel?: AsilLevel
 }
 
 const MISRA_RULES: Record<string, MisraRule> = {
@@ -41,12 +48,13 @@ const MISRA_RULES: Record<string, MisraRule> = {
 	"R9.1": { id: "R9.1", category: "mandatory", description: "The value of an object with automatic storage shall not be read before it has been set." },
 	"R11.3": { id: "R11.3", category: "required", description: "A cast shall not be performed between a pointer to object type and a pointer to a different object type." },
 	"R14.4": { id: "R14.4", category: "required", description: "The controlling expression of an if or iteration statement shall have essentially Boolean type." },
-	"R15.5": { id: "R15.5", category: "advisory", description: "A function should have a single point of exit at the end of the function." },
+	"R15.5": { id: "R15.5", category: "advisory", description: "A function should have a single point of exit at the end of the function.", appliesTo: "all" },
 	"R17.7": { id: "R17.7", category: "required", description: "The value returned by a function having non-void return type shall be used." },
 	"R21.3": { id: "R21.3", category: "required", description: "The memory allocation and deallocation functions of <stdlib.h> shall not be used." },
 	"R21.6": { id: "R21.6", category: "required", description: "The Standard Library input/output functions shall not be used." },
 	"R21.8": { id: "R21.8", category: "required", description: "The library functions abort, exit, getenv and system of <stdlib.h> shall not be used." },
 	"R21.9": { id: "R21.9", category: "required", description: "The library functions bsearch and qsort of <stdlib.h> shall not be used." },
+	"SAFETY-EXIT": { id: "SAFETY-EXIT", category: "mandatory", description: "A safety-relevant function shall have a single point of exit.", appliesTo: ["ASIL_C", "ASIL_D"] },
 }
 
 function stripCComments(content: string): string {
@@ -55,6 +63,25 @@ function stripCComments(content: string): string {
 
 function countLinesBefore(content: string, offset: number): number {
 	return content.slice(0, offset).split("\n").length
+}
+
+function ruleAppliesTo(rule: MisraRule, asilLevel?: AsilLevel): boolean {
+	if (!rule.appliesTo || rule.appliesTo === "all") {
+		return true
+	}
+	if (!asilLevel) {
+		return false
+	}
+	return rule.appliesTo.includes(asilLevel)
+}
+
+function effectiveSeverity(category: MisraRule["category"], asilLevel?: AsilLevel): "error" | "warning" | "info" {
+	const base = ruleSeverity(category)
+	// Under ASIL C/D, advisory rules are treated as errors.
+	if (base === "warning" && category === "advisory" && isHighAsil(asilLevel ?? "QM")) {
+		return "error"
+	}
+	return base
 }
 
 function ruleSeverity(category: MisraRule["category"]): "error" | "warning" | "info" {
@@ -83,6 +110,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 	const isHeader = ext === ".h"
 
 	const maxExternalIdLen = options.maxExternalIdentifierLength ?? 31
+	const asilLevel = options.asilLevel
 
 	// R21.3 / R21.8 / R21.9: forbidden stdlib functions.
 	const forbiddenStdlib = new Map<string, string>([
@@ -105,7 +133,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 		issues.push({
 			rule,
 			category: MISRA_RULES[rule].category,
-			severity: ruleSeverity(MISRA_RULES[rule].category),
+			severity: effectiveSeverity(MISRA_RULES[rule].category, asilLevel),
 			line: countLinesBefore(stripped, match.index),
 			message: `Use of forbidden <stdlib.h> function "${func}()" is not allowed in MISRA C code.`,
 		})
@@ -118,7 +146,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 		issues.push({
 			rule: "R21.6",
 			category: MISRA_RULES["R21.6"].category,
-			severity: ruleSeverity(MISRA_RULES["R21.6"].category),
+			severity: effectiveSeverity(MISRA_RULES["R21.6"].category, asilLevel),
 			line: countLinesBefore(stripped, match.index),
 			message: `Use of forbidden <stdio.h> function "${func}()" is not allowed in MISRA C code.`,
 		})
@@ -130,7 +158,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 		issues.push({
 			rule: "R7.1",
 			category: MISRA_RULES["R7.1"].category,
-			severity: ruleSeverity(MISRA_RULES["R7.1"].category),
+			severity: effectiveSeverity(MISRA_RULES["R7.1"].category, asilLevel),
 			line: countLinesBefore(stripped, match.index),
 			message: `Octal constant "0${match[1]}" is not allowed; use explicit decimal or hex form.`,
 		})
@@ -155,24 +183,35 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 		issues.push({
 			rule: "R14.4",
 			category: MISRA_RULES["R14.4"].category,
-			severity: ruleSeverity(MISRA_RULES["R14.4"].category),
+			severity: effectiveSeverity(MISRA_RULES["R14.4"].category, asilLevel),
 			line: countLinesBefore(stripped, match.index),
 			message: `Potential assignment used as controlling expression in ${match[1]} statement.`,
 		})
 	}
 
-	// R15.5: multiple return statements.
+	// R15.5 / SAFETY-EXIT: multiple return statements.
 	const functionBlocks = findFunctionBodies(stripped)
 	for (const { name, body, startOffset } of functionBlocks) {
 		const returnCount = (body.match(/\breturn\b/g) || []).length
 		if (returnCount > 1) {
-			issues.push({
-				rule: "R15.5",
-				category: MISRA_RULES["R15.5"].category,
-				severity: ruleSeverity(MISRA_RULES["R15.5"].category),
-				line: countLinesBefore(stripped, startOffset),
-				message: `Function "${name}" contains ${returnCount} return statements; MISRA recommends a single exit point.`,
-			})
+			const line = countLinesBefore(stripped, startOffset)
+			if (ruleAppliesTo(MISRA_RULES["SAFETY-EXIT"], asilLevel)) {
+				issues.push({
+					rule: "SAFETY-EXIT",
+					category: MISRA_RULES["SAFETY-EXIT"].category,
+					severity: effectiveSeverity(MISRA_RULES["SAFETY-EXIT"].category, asilLevel),
+					line,
+					message: `Safety-relevant function "${name}" contains ${returnCount} return statements; a single exit point is required.`,
+				})
+			} else if (ruleAppliesTo(MISRA_RULES["R15.5"], asilLevel)) {
+				issues.push({
+					rule: "R15.5",
+					category: MISRA_RULES["R15.5"].category,
+					severity: effectiveSeverity(MISRA_RULES["R15.5"].category, asilLevel),
+					line,
+					message: `Function "${name}" contains ${returnCount} return statements; MISRA recommends a single exit point.`,
+				})
+			}
 		}
 	}
 
@@ -207,7 +246,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 			issues.push({
 				rule: "R5.1",
 				category: MISRA_RULES["R5.1"].category,
-				severity: ruleSeverity(MISRA_RULES["R5.1"].category),
+				severity: effectiveSeverity(MISRA_RULES["R5.1"].category, asilLevel),
 				message: `External identifier "${id}" (${id.length} chars) exceeds the ${maxExternalIdLen}-character portability limit.`,
 			})
 		}
@@ -229,10 +268,23 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 			issues.push({
 				rule: "R8.4",
 				category: MISRA_RULES["R8.4"].category,
-				severity: ruleSeverity(MISRA_RULES["R8.4"].category),
+				severity: effectiveSeverity(MISRA_RULES["R8.4"].category, asilLevel),
 				message: `Function "${fn}" is defined without a visible declaration.`,
 			})
 		}
+	}
+
+	// R8.9: file-scope objects that could be moved to block scope (heuristic).
+	const fileScopeVarRegex = /(?:^|\n)\s*(?!static\b|extern\b|const\b|typedef\b)(?:[A-Za-z_][A-Za-z0-9_]*\s+)+?\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^;]*)?;/g
+	while ((match = fileScopeVarRegex.exec(stripped)) !== null) {
+		const id = match[match.length - 1]
+		issues.push({
+			rule: "R8.9",
+			category: MISRA_RULES["R8.9"].category,
+			severity: effectiveSeverity(MISRA_RULES["R8.9"].category, asilLevel),
+			line: countLinesBefore(stripped, match.index),
+			message: `File-scope object "${id}" may be better defined at block scope if it is only used in one function.`,
+		})
 	}
 
 	// R9.1: uninitialized locals (existing heuristic, moved here with rule mapping).
@@ -241,7 +293,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 		issues.push({
 			rule: "R9.1",
 			category: MISRA_RULES["R9.1"].category,
-			severity: ruleSeverity(MISRA_RULES["R9.1"].category),
+			severity: effectiveSeverity(MISRA_RULES["R9.1"].category, asilLevel),
 			message: `Potentially uninitialized local variable: ${variable}.`,
 		})
 	}

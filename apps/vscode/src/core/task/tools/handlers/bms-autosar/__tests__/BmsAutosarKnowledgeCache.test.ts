@@ -5,10 +5,13 @@ import { describe, it, beforeEach, afterEach } from "mocha"
 import {
 	findAndLoadTemplatesCached,
 	invalidateBmsAutosarKnowledgeCache,
+	loadArxmlGraphCached,
 	loadBmsAutosarKnowledgeBaseWithSourcesCached,
 	loadKnowledgeSourceCached,
 	loadTemplatesCached,
+	saveArxmlGraphCached,
 } from "../BmsAutosarKnowledgeCache"
+import { buildArxmlKnowledgeGraph } from "../BmsAutosarKnowledgeGraph"
 
 describe("BmsAutosarKnowledgeCache", () => {
 	let tempDir = ""
@@ -113,6 +116,55 @@ describe("BmsAutosarKnowledgeCache", () => {
 
 		const reloaded = await loadKnowledgeSourceCached(knowledgePath)
 		assert.ok(reloaded)
+	})
+
+	it("caches and reloads an ARXML graph by mtime", async () => {
+		const arxmlPath = path.join(tempDir, "sample.arxml")
+		const arxml = `<?xml version="1.0" encoding="UTF-8"?>
+<AUTOSAR>
+  <AR-PACKAGES>
+    <AR-PACKAGE>
+      <SHORT-NAME>BmsPackage</SHORT-NAME>
+      <ELEMENTS>
+        <APPLICATION-SW-COMPONENT-TYPE>
+          <SHORT-NAME>BmsCellMonitor</SHORT-NAME>
+        </APPLICATION-SW-COMPONENT-TYPE>
+      </ELEMENTS>
+    </AR-PACKAGE>
+  </AR-PACKAGES>
+</AUTOSAR>`
+		await fs.writeFile(arxmlPath, arxml, "utf-8")
+		const stat = await fs.stat(arxmlPath)
+		const graph = buildArxmlKnowledgeGraph(arxml)
+
+		await saveArxmlGraphCached(arxmlPath, stat.mtimeMs, graph)
+		const cached = await loadArxmlGraphCached(arxmlPath)
+
+		assert.ok(cached)
+		assert.equal(cached?.nodes.size, graph.nodes.size)
+		assert.deepStrictEqual(cached?.edges, graph.edges)
+	})
+
+	it("invalidates the ARXML graph cache when the file changes", async () => {
+		const arxmlPath = path.join(tempDir, "sample.arxml")
+		const arxml = `<?xml version="1.0" encoding="UTF-8"?>
+<AUTOSAR>
+  <AR-PACKAGES>
+    <AR-PACKAGE>
+      <SHORT-NAME>BmsPackage</SHORT-NAME>
+    </AR-PACKAGE>
+  </AR-PACKAGES>
+</AUTOSAR>`
+		await fs.writeFile(arxmlPath, arxml, "utf-8")
+		const stat = await fs.stat(arxmlPath)
+		const graph = buildArxmlKnowledgeGraph(arxml)
+		await saveArxmlGraphCached(arxmlPath, stat.mtimeMs, graph)
+
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		await fs.writeFile(arxmlPath, arxml.replace("BmsPackage", "BmsPackage2"), "utf-8")
+
+		const cached = await loadArxmlGraphCached(arxmlPath)
+		assert.equal(cached, undefined)
 	})
 
 	it("loads workspace knowledge source with caching", async () => {

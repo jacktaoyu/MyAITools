@@ -24,6 +24,7 @@ import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 import { formatValidationReport, shouldValidateAutosarFile } from "../utils/BmsAutosarValidationUtils"
 import { fixAutosarContent, runBmsAutosarQualityGates } from "../utils/BmsAutosarQualityGates"
+import { inferAsilLevel } from "./bms-autosar/BmsAutosarAsilSafetyChecker"
 
 export class WriteToFileToolHandler implements IFullyManagedTool {
 	readonly name = ClineDefaultTool.FILE_NEW // This handler supports write_to_file, replace_in_file, and new_rule
@@ -368,7 +369,8 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			let autosarValidationReport = ""
 			try {
 				if (finalContent && shouldValidateAutosarFile(relPath)) {
-					const validationResult = await runBmsAutosarQualityGates(relPath, finalContent, { cwd: config.cwd })
+					const asilLevel = inferAsilLevel(finalContent, "QM")
+					const validationResult = await runBmsAutosarQualityGates(relPath, finalContent, { cwd: config.cwd, asilLevel })
 					autosarValidationReport = formatValidationReport(relPath, validationResult)
 				}
 			} catch {

@@ -5,6 +5,7 @@ import {
 	AutoFixBmsAutosarFileResponse,
 	AutoFixBmsAutosarFilesRequest,
 	AutoFixBmsAutosarFilesResponse,
+	BmsAutosarQualityIssue,
 	BmsAutosarQualityReport,
 	BmsAutosarQualityReportFile,
 	BmsAutosarQualityReportRequest,
@@ -15,8 +16,10 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient } from "@/services/grpc-client"
 
 type Severity = "error" | "warning" | "info"
+type Category = "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
 
 const severityOrder: Severity[] = ["error", "warning", "info"]
+const categories: Category[] = ["MISRA", "ASIL", "STRUCTURAL", "COMPILE"]
 
 const severityIcon = (severity: Severity) => {
 	switch (severity) {
@@ -46,6 +49,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 	const [loading, setLoading] = useState(false)
 	const [fixingFile, setFixingFile] = useState<string | null>(null)
 	const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
+	const [selectedCategory, setSelectedCategory] = useState<Category | "all">("all")
 	const [preview, setPreview] = useState<AutoFixBmsAutosarFileResponse | null>(null)
 	const [batchPreview, setBatchPreview] = useState<AutoFixBmsAutosarFilesResponse | null>(null)
 	const [batchFixing, setBatchFixing] = useState(false)
@@ -153,10 +157,14 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 		}
 	}
 
+	const matchesFilters = (issue: BmsAutosarQualityIssue) => {
+		const severityMatch = selectedSeverity === "all" || issue.severity === selectedSeverity
+		const categoryMatch = selectedCategory === "all" || issue.category === selectedCategory
+		return severityMatch && categoryMatch
+	}
+
 	const filteredFiles =
-		report?.files.filter((file) =>
-			selectedSeverity === "all" ? true : file.issues.some((issue) => issue.severity === selectedSeverity),
-		) || []
+		report?.files.filter((file) => file.issues.some(matchesFilters)) || []
 
 	const totalIssues = report?.total ?? 0
 
@@ -234,7 +242,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 									</div>
 									<ul className="mt-1 space-y-0.5">
 										{file.issues
-											.filter((issue) => (selectedSeverity === "all" ? true : issue.severity === selectedSeverity))
+											.filter(matchesFilters)
 											.map((issue, issueIndex) => (
 												<li key={issueIndex} className="text-xs flex items-start gap-1.5">
 													<span className={severityClass(issue.severity as Severity)}>
