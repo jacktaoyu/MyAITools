@@ -16,7 +16,7 @@ const customTemplate = {
 	default_ports: [],
 	default_runnables: [],
 	header_template: "#ifndef MY_H\n#define MY_H\n#endif",
-	c_template: "#include \"My.h\"",
+	c_template: '#include "My.h"',
 	arxml_template: "<AUTOSAR></AUTOSAR>",
 }
 
@@ -40,7 +40,7 @@ describe("BmsAutosarTemplateStorage", () => {
 	it("saves and loads a workspace template", async () => {
 		await saveBmsTemplate(tempDir, "workspace", "my_swc", customTemplate)
 		const data = await loadBmsTemplates(tempDir, "workspace")
-		assert.deepEqual(data.templates["my_swc"], customTemplate)
+		assert.deepEqual(data.templates.my_swc, customTemplate)
 	})
 
 	it("saves templates in separate workspace and global directories", async () => {
@@ -51,10 +51,10 @@ describe("BmsAutosarTemplateStorage", () => {
 		const wsData = await loadBmsTemplates(tempDir, "workspace")
 		const globalData = await loadBmsTemplates(tempDir, "global")
 
-		assert.ok(wsData.templates["ws_template"])
-		assert.ok(!wsData.templates["global_template"])
-		assert.ok(globalData.templates["global_template"])
-		assert.ok(!globalData.templates["ws_template"])
+		assert.ok(wsData.templates.ws_template)
+		assert.ok(!wsData.templates.global_template)
+		assert.ok(globalData.templates.global_template)
+		assert.ok(!globalData.templates.ws_template)
 
 		// Clean up global test file.
 		await fs.rm(path.join(globalDir, "templates.json"), { force: true }).catch(() => {})
@@ -65,7 +65,7 @@ describe("BmsAutosarTemplateStorage", () => {
 		const deleted = await deleteBmsTemplate(tempDir, "workspace", "to_delete")
 		assert.equal(deleted, true)
 		const data = await loadBmsTemplates(tempDir, "workspace")
-		assert.ok(!data.templates["to_delete"])
+		assert.ok(!data.templates.to_delete)
 	})
 
 	it("returns false when deleting a non-existent template", async () => {
@@ -82,17 +82,25 @@ describe("BmsAutosarTemplateStorage", () => {
 			},
 		}
 
-		await saveBmsTemplate(tempDir, "global", "shared", { ...customTemplate, component_type: "shared", header_template: "global" })
+		await saveBmsTemplate(tempDir, "global", "shared", {
+			...customTemplate,
+			component_type: "shared",
+			header_template: "global",
+		})
 		await saveBmsTemplate(tempDir, "global", "global_only", { ...customTemplate, component_type: "global_only" })
-		await saveBmsTemplate(tempDir, "workspace", "shared", { ...customTemplate, component_type: "shared", header_template: "workspace" })
+		await saveBmsTemplate(tempDir, "workspace", "shared", {
+			...customTemplate,
+			component_type: "shared",
+			header_template: "workspace",
+		})
 		await saveBmsTemplate(tempDir, "workspace", "workspace_only", { ...customTemplate, component_type: "workspace_only" })
 
 		const merged = await loadMergedTemplates(tempDir, builtIn)
 
-		assert.equal(merged.templates["shared"].header_template, "workspace")
-		assert.equal(merged.templates["global_only"].component_type, "global_only")
-		assert.equal(merged.templates["workspace_only"].component_type, "workspace_only")
-		assert.equal(merged.templates["builtin_only"].component_type, "builtin_only")
+		assert.equal(merged.templates.shared.header_template, "workspace")
+		assert.equal(merged.templates.global_only.component_type, "global_only")
+		assert.equal(merged.templates.workspace_only.component_type, "workspace_only")
+		assert.equal(merged.templates.builtin_only.component_type, "builtin_only")
 	})
 
 	it("returns the expected templates directory", () => {

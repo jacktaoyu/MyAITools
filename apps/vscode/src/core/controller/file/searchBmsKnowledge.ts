@@ -90,6 +90,11 @@ export async function searchBmsKnowledge(
 			snippet: truncateSnippet(result.entry.content, SNIPPET_MAX_CHARS),
 			tags: result.entry.tags || [],
 			sourceFiles: result.entry.sourceFiles || [],
+			locations: (result.entry.locations || []).map((loc) => ({
+				path: loc.path || "",
+				page: loc.page ?? 0,
+				chapter: loc.chapter || "",
+			})),
 		})),
 	});
 }

@@ -79,8 +79,7 @@ function findParentTag(xml: string, offset: number): { tag: string; offset: numb
 	const textBefore = xml.slice(0, offset)
 	const tagRegex = /<(\/?)([A-Za-z_][\w:-]*)\b[^>]*?\/?>/g
 	const tags: { tag: string; isOpen: boolean; index: number }[] = []
-	let match: RegExpExecArray | null
-	while ((match = tagRegex.exec(textBefore)) !== null) {
+	for (const match of textBefore.matchAll(tagRegex)) {
 		const isOpen = match[1] !== "/"
 		const tag = match[2]
 		tags.push({ tag, isOpen, index: match.index })
@@ -122,8 +121,7 @@ function findInterestingAncestorTag(xml: string, offset: number): { tag: string;
 function extractShortNames(content: string): ShortNameMatch[] {
 	const results: ShortNameMatch[] = []
 	const regex = /<SHORT-NAME\b[^>]*>([^<]+)<\/SHORT-NAME>/g
-	let match: RegExpExecArray | null
-	while ((match = regex.exec(content)) !== null) {
+	for (const match of content.matchAll(regex)) {
 		const parent = findParentTag(content, match.index)
 		if (!parent) continue
 		results.push({
@@ -150,7 +148,7 @@ function buildElementPath(shortNames: ShortNameMatch[], ownMatch: ShortNameMatch
 			packageParts.push(sn.name)
 		}
 	}
-	const prefix = packageParts.length > 0 ? packageParts.join("/") + "/" : ""
+	const prefix = packageParts.length > 0 ? `${packageParts.join("/")}/` : ""
 	return `${prefix}${ownMatch.name}`
 }
 
@@ -163,8 +161,7 @@ function derivePackagePath(pathStr: string): string {
 function parseAttrs(attrString: string): Record<string, string> {
 	const attrs: Record<string, string> = {}
 	const regex = /(\w+)\s*=\s*"([^"]*)"/g
-	let match: RegExpExecArray | null
-	while ((match = regex.exec(attrString)) !== null) {
+	for (const match of attrString.matchAll(regex)) {
 		attrs[match[1]] = match[2]
 	}
 	return attrs
@@ -255,9 +252,9 @@ export function buildArxmlKnowledgeGraphRegex(content: string): ArxmlGraph {
 	}
 
 	// Extract reference edges from TREF/REF elements.
-	const refRegex = /<(TYPE-TREF|DATA-TYPE-TREF|INTERFACE-TREF|REQUIRED-INTERFACE-TREF|PROVIDED-INTERFACE-TREF|COMPONENT-TREF|SOFTWARE-COMPOSITION-TREF|START-ON-EVENT-REF)\b([^>]*)>([^<]*)<\/\1>/g
-	let match: RegExpExecArray | null
-	while ((match = refRegex.exec(content)) !== null) {
+	const refRegex =
+		/<(TYPE-TREF|DATA-TYPE-TREF|INTERFACE-TREF|REQUIRED-INTERFACE-TREF|PROVIDED-INTERFACE-TREF|COMPONENT-TREF|SOFTWARE-COMPOSITION-TREF|START-ON-EVENT-REF)\b([^>]*)>([^<]*)<\/\1>/g
+	for (const match of content.matchAll(refRegex)) {
 		const tagName = match[1]
 		const attrs = parseAttrs(match[2])
 		const refPath = match[3].trim()
@@ -295,7 +292,10 @@ function resolveReferenceTarget(graph: ArxmlGraph, targetType: ArxmlNodeType, re
 	const targetName = refPath.split("/").pop() || refPath
 	const fullPath = refPath.startsWith("/") ? refPath.slice(1) : refPath
 	for (const node of graph.nodes.values()) {
-		if (node.type === targetType && (node.path === fullPath || node.path.endsWith(`/${targetName}`) || node.name === targetName)) {
+		if (
+			node.type === targetType &&
+			(node.path === fullPath || node.path.endsWith(`/${targetName}`) || node.name === targetName)
+		) {
 			return node.id
 		}
 	}
@@ -471,8 +471,8 @@ export function getRelatedNodes(graph: ArxmlGraph, nodeId: string, maxHops = 2):
 	distances.set(nodeId, 0)
 
 	while (queue.length > 0) {
-		const current = queue.shift()!
-		if (current.hops >= maxHops) continue
+		const current = queue.shift()
+		if (!current || current.hops >= maxHops) continue
 
 		for (const edge of graph.edges) {
 			const neighbor = edge.source === current.id ? edge.target : edge.target === current.id ? edge.source : undefined

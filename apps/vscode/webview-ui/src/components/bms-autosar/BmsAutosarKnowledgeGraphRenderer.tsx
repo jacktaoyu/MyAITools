@@ -1,9 +1,6 @@
+import { BmsAutosarKnowledgeGraphEdge, BmsAutosarKnowledgeGraphNode } from "@shared/proto/cline/file"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useMemo, useRef, useState } from "react"
-import {
-	BmsAutosarKnowledgeGraphEdge,
-	BmsAutosarKnowledgeGraphNode,
-} from "@shared/proto/cline/file"
 
 interface GraphNode extends BmsAutosarKnowledgeGraphNode {
 	x: number
@@ -53,7 +50,7 @@ function simpleForceLayout(
 				const b = nodes[j]
 				let dx = a.x - b.x
 				let dy = a.y - b.y
-				let dist = Math.sqrt(dx * dx + dy * dy) || 1
+				const dist = Math.sqrt(dx * dx + dy * dy) || 1
 				if (dist < 200) {
 					const force = (k * k) / dist
 					dx = (dx / dist) * force
@@ -108,10 +105,7 @@ function sanitizeMermaidId(id: string): string {
 	return id.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^[0-9]/, "_$&")
 }
 
-function generateMermaid(graph: {
-	nodes: BmsAutosarKnowledgeGraphNode[]
-	edges: BmsAutosarKnowledgeGraphEdge[]
-}): string {
+function generateMermaid(graph: { nodes: BmsAutosarKnowledgeGraphNode[]; edges: BmsAutosarKnowledgeGraphEdge[] }): string {
 	const idMap = new Map<string, string>()
 	const used = new Set<string>()
 	graph.nodes.forEach((node, index) => {
@@ -128,7 +122,8 @@ function generateMermaid(graph: {
 
 	const lines = ["graph LR"]
 	for (const node of graph.nodes) {
-		const id = idMap.get(node.id)!
+		const id = idMap.get(node.id) ?? ""
+		if (!id) continue
 		const label = `${node.type}: ${node.name}`.replace(/"/g, "#quot;")
 		lines.push(`    ${id}["${label}"]`)
 	}
@@ -203,22 +198,22 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				{children}
 				<div className="flex-1" />
 				<button
-					onClick={() => setSelectedNode(null)}
 					className={`text-xs px-2 py-1 rounded border ${
 						selectedNode === null
 							? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-transparent"
 							: "bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
-					}`}>
+					}`}
+					onClick={() => setSelectedNode(null)}
+					type="button">
 					All edges
 				</button>
-				<VSCodeButton appearance="secondary" onClick={handleExportMermaid} disabled={nodes.length === 0}>
+				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={handleExportMermaid}>
 					Export Mermaid
 				</VSCodeButton>
-				<VSCodeButton appearance="secondary" onClick={handleExportSvg} disabled={nodes.length === 0}>
+				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={handleExportSvg}>
 					Export SVG
 				</VSCodeButton>
 			</div>
-
 			<div
 				className="flex-1 border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] overflow-hidden"
 				style={{ minHeight: height }}>
@@ -227,40 +222,50 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				) : layoutedNodes.length === 0 ? (
 					<div className="text-sm text-description py-4 text-center">{emptyMessage}</div>
 				) : (
-					<svg ref={svgRef} width={width} height={height}>
+					<svg aria-label="ARXML knowledge graph" height={height} ref={svgRef} role="img" width={width}>
+						<title>ARXML knowledge graph</title>
 						{visibleEdges.map((edge, i) => {
 							const source = layoutedNodes.find((n) => n.id === edge.source)
 							const target = layoutedNodes.find((n) => n.id === edge.target)
 							if (!source || !target) return null
 							return (
 								<line
-									key={i}
-									x1={source.x}
-									y1={source.y}
-									x2={target.x}
-									y2={target.y}
+									key={`${edge.source}-${edge.target}-${i}`}
 									stroke="var(--vscode-panel-border)"
 									strokeWidth={1}
+									x1={source.x}
+									x2={target.x}
+									y1={source.y}
+									y2={target.y}
 								/>
 							)
 						})}
 						{layoutedNodes.map((node) => (
+							// biome-ignore lint/a11y/useSemanticElements: SVG node group cannot be a <button>
 							<g
-								key={node.id}
-								transform={`translate(${node.x}, ${node.y})`}
+								aria-label={`${node.type} ${node.name}`}
 								className="cursor-pointer"
-								onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}>
+								key={node.id}
+								onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" || event.key === " ") {
+										setSelectedNode(selectedNode === node.id ? null : node.id)
+									}
+								}}
+								role="button"
+								tabIndex={0}
+								transform={`translate(${node.x}, ${node.y})`}>
 								<circle
-									r={node.radius}
 									fill={TYPE_COLORS[node.type] || TYPE_COLORS.UNKNOWN}
+									r={node.radius}
 									stroke={selectedNode === node.id ? "var(--vscode-button-background)" : "transparent"}
 									strokeWidth={3}
 								/>
 								<text
-									textAnchor="middle"
-									dy="0.35em"
 									className="text-[10px] fill-white pointer-events-none"
-									style={{ fontFamily: "var(--vscode-font-family)" }}>
+									dy="0.35em"
+									style={{ fontFamily: "var(--vscode-font-family)" }}
+									textAnchor="middle">
 									{node.name.length > 10 ? `${node.name.slice(0, 9)}…` : node.name}
 								</text>
 								<title>{`${node.type}: ${node.path}`}</title>
@@ -269,12 +274,11 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 					</svg>
 				)}
 			</div>
-
-			{selectedNode && (
-				<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)]">
-					Selected: {layoutedNodes.find((n) => n.id === selectedNode)?.path}
-				</div>
-			)}
+			selectedNode && (
+			<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)]">
+				Selected: {layoutedNodes.find((n) => n.id === selectedNode)?.path}
+			</div>
+			)
 		</div>
 	)
 }

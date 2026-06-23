@@ -1,5 +1,4 @@
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import React, { useCallback, useEffect, useState } from "react"
+import { StringRequest } from "@shared/proto/cline/common"
 import {
 	AutoFixBmsAutosarFileRequest,
 	AutoFixBmsAutosarFileResponse,
@@ -10,16 +9,18 @@ import {
 	BmsAutosarQualityReportFile,
 	BmsAutosarQualityReportRequest,
 } from "@shared/proto/cline/file"
-import { StringRequest } from "@shared/proto/cline/common"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import React, { useCallback, useEffect, useState } from "react"
 import ViewHeader from "@/components/common/ViewHeader"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient } from "@/services/grpc-client"
+import { getErrorMessage } from "./BmsAutosarWizard.utils"
 
 type Severity = "error" | "warning" | "info"
 type Category = "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
 
 const severityOrder: Severity[] = ["error", "warning", "info"]
-const categories: Category[] = ["MISRA", "ASIL", "STRUCTURAL", "COMPILE"]
+const _categories: Category[] = ["MISRA", "ASIL", "STRUCTURAL", "COMPILE"]
 
 const severityIcon = (severity: Severity) => {
 	switch (severity) {
@@ -49,7 +50,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 	const [loading, setLoading] = useState(false)
 	const [fixingFile, setFixingFile] = useState<string | null>(null)
 	const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
-	const [selectedCategory, setSelectedCategory] = useState<Category | "all">("all")
+	const [selectedCategory, _setSelectedCategory] = useState<Category | "all">("all")
 	const [preview, setPreview] = useState<AutoFixBmsAutosarFileResponse | null>(null)
 	const [batchPreview, setBatchPreview] = useState<AutoFixBmsAutosarFilesResponse | null>(null)
 	const [batchFixing, setBatchFixing] = useState(false)
@@ -57,11 +58,9 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 	const fetchReport = useCallback(async () => {
 		setLoading(true)
 		try {
-			const response = await FileServiceClient.getBmsAutosarQualityReport(
-				BmsAutosarQualityReportRequest.create({}),
-			)
+			const response = await FileServiceClient.getBmsAutosarQualityReport(BmsAutosarQualityReportRequest.create({}))
 			setReport(response)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to load BMS AUTOSAR quality report:", error)
 		} finally {
 			setLoading(false)
@@ -75,7 +74,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 	const handleOpenFile = async (filePath: string) => {
 		try {
 			await FileServiceClient.openFileRelativePath(StringRequest.create({ value: filePath }))
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to open file:", error)
 		}
 	}
@@ -87,9 +86,9 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 				AutoFixBmsAutosarFileRequest.create({ filePath, apply: false }),
 			)
 			setPreview(response)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Auto-fix failed:", error)
-			alert(`Auto-fix failed: ${error?.message || error}`)
+			alert(`Auto-fix failed: ${getErrorMessage(error)}`)
 		} finally {
 			setFixingFile(null)
 		}
@@ -107,17 +106,18 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 			setPreview(null)
 			await fetchReport()
 			alert(response.message)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Apply fix failed:", error)
-			alert(`Apply fix failed: ${error?.message || error}`)
+			alert(`Apply fix failed: ${getErrorMessage(error)}`)
 		} finally {
 			setFixingFile(null)
 		}
 	}
 
-	const fixableFilePaths = report?.files
-		.filter((file) => file.issues.some((i) => i.severity === "error" || i.severity === "warning"))
-		.map((file) => file.filePath) ?? []
+	const fixableFilePaths =
+		report?.files
+			.filter((file) => file.issues.some((i) => i.severity === "error" || i.severity === "warning"))
+			.map((file) => file.filePath) ?? []
 
 	const handleFixAll = async () => {
 		if (fixableFilePaths.length === 0) {
@@ -129,9 +129,9 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 				AutoFixBmsAutosarFilesRequest.create({ filePaths: fixableFilePaths, apply: false }),
 			)
 			setBatchPreview(response)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Batch auto-fix failed:", error)
-			alert(`Batch auto-fix failed: ${error?.message || error}`)
+			alert(`Batch auto-fix failed: ${getErrorMessage(error)}`)
 		} finally {
 			setBatchFixing(false)
 		}
@@ -149,9 +149,9 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 			setBatchPreview(null)
 			await fetchReport()
 			alert(response.message)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Apply all fixes failed:", error)
-			alert(`Apply all fixes failed: ${error?.message || error}`)
+			alert(`Apply all fixes failed: ${getErrorMessage(error)}`)
 		} finally {
 			setBatchFixing(false)
 		}
@@ -163,14 +163,13 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 		return severityMatch && categoryMatch
 	}
 
-	const filteredFiles =
-		report?.files.filter((file) => file.issues.some(matchesFilters)) || []
+	const filteredFiles = report?.files.filter((file) => file.issues.some(matchesFilters)) || []
 
 	const totalIssues = report?.total ?? 0
 
 	return (
 		<div className="fixed inset-0 flex flex-col bg-[var(--vscode-editor-background)]">
-			<ViewHeader title="BMS AUTOSAR Quality Report" onDone={onDone} environment={environment} />
+			<ViewHeader environment={environment} onDone={onDone} title="BMS AUTOSAR Quality Report" />
 
 			<div className="flex-1 overflow-hidden flex flex-col px-5 pb-5">
 				<div className="text-sm text-[var(--vscode-descriptionForeground)] mb-3">
@@ -182,13 +181,14 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 				<div className="flex items-center gap-2 mb-3">
 					{(["all", ...severityOrder] as const).map((sev) => (
 						<button
-							key={sev}
-							onClick={() => setSelectedSeverity(sev)}
 							className={`text-xs px-2 py-1 rounded border ${
 								selectedSeverity === sev
 									? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-transparent"
 									: "bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
-							}`}>
+							}`}
+							key={sev}
+							onClick={() => setSelectedSeverity(sev)}
+							type="button">
 							{sev === "all" ? "All" : `${severityIcon(sev as Severity)} ${sev}`}
 						</button>
 					))}
@@ -197,13 +197,16 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 						<VSCodeButton
 							appearance="primary"
 							aria-label="Fix all issues"
-							onClick={handleFixAll}
-							disabled={batchFixing}>
-							<i className={`codicon codicon-wand ${batchFixing ? "animate-pulse" : ""}`} style={{ fontSize: "12.5px" }} />
+							disabled={batchFixing}
+							onClick={handleFixAll}>
+							<i
+								className={`codicon codicon-wand ${batchFixing ? "animate-pulse" : ""}`}
+								style={{ fontSize: "12.5px" }}
+							/>
 							<span className="ml-1 text-xs">Fix All</span>
 						</VSCodeButton>
 					)}
-					<VSCodeButton appearance="icon" aria-label="Refresh" onClick={fetchReport} disabled={loading}>
+					<VSCodeButton appearance="icon" aria-label="Refresh" disabled={loading} onClick={fetchReport}>
 						<i
 							className={`codicon codicon-refresh ${loading ? "animate-spin" : ""}`}
 							style={{ fontSize: "12.5px" }}
@@ -218,12 +221,13 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 						<div className="text-sm text-description py-4 text-center">No issues match the selected filter.</div>
 					) : (
 						<ul className="divide-y divide-[var(--vscode-panel-border)]">
-							{filteredFiles.map((file: BmsAutosarQualityReportFile, fileIndex) => (
-								<li key={fileIndex} className="py-2 px-2">
+							{filteredFiles.map((file: BmsAutosarQualityReportFile, _fileIndex) => (
+								<li className="py-2 px-2" key={file.filePath}>
 									<div className="flex items-center justify-between gap-2">
 										<button
+											className="text-xs font-medium text-[var(--vscode-textLink-foreground)] hover:underline text-left"
 											onClick={() => handleOpenFile(file.filePath)}
-											className="text-xs font-medium text-[var(--vscode-textLink-foreground)] hover:underline text-left">
+											type="button">
 											{file.filePath}
 										</button>
 										{file.issues.some((i) => i.severity === "error" || i.severity === "warning") && (
@@ -241,23 +245,23 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 										)}
 									</div>
 									<ul className="mt-1 space-y-0.5">
-										{file.issues
-											.filter(matchesFilters)
-											.map((issue, issueIndex) => (
-												<li key={issueIndex} className="text-xs flex items-start gap-1.5">
-													<span className={severityClass(issue.severity as Severity)}>
-														{severityIcon(issue.severity as Severity)}
-													</span>
-													<span className="text-[var(--vscode-foreground)]">
-														{issue.message}
-														{issue.line > 0 && (
-															<span className="text-[var(--vscode-descriptionForeground)] ml-1">
-																(line {issue.line})
-															</span>
-														)}
-													</span>
-												</li>
-											))}
+										{file.issues.filter(matchesFilters).map((issue, _issueIndex) => (
+											<li
+												className="text-xs flex items-start gap-1.5"
+												key={`${issue.rule}:${issue.line}:${issue.message.slice(0, 24)}`}>
+												<span className={severityClass(issue.severity as Severity)}>
+													{severityIcon(issue.severity as Severity)}
+												</span>
+												<span className="text-[var(--vscode-foreground)]">
+													{issue.message}
+													{issue.line > 0 && (
+														<span className="text-[var(--vscode-descriptionForeground)] ml-1">
+															(line {issue.line})
+														</span>
+													)}
+												</span>
+											</li>
+										))}
 									</ul>
 								</li>
 							))}
@@ -278,13 +282,15 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 						{preview.fixed && (
 							<>
 								<div className="flex-1 overflow-auto border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] min-h-[300px]">
-									<pre className="text-xs font-mono p-3 whitespace-pre">{preview.diff || preview.fixedContent}</pre>
+									<pre className="text-xs font-mono p-3 whitespace-pre">
+										{preview.diff || preview.fixedContent}
+									</pre>
 								</div>
 								<div className="flex justify-end gap-2 mt-3">
 									<VSCodeButton appearance="secondary" onClick={() => setPreview(null)}>
 										Cancel
 									</VSCodeButton>
-									<VSCodeButton appearance="primary" onClick={handleApplyFix} disabled={!!fixingFile}>
+									<VSCodeButton appearance="primary" disabled={!!fixingFile} onClick={handleApplyFix}>
 										{fixingFile ? "Applying..." : "Apply Fix"}
 									</VSCodeButton>
 								</div>
@@ -315,20 +321,24 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 								<div className="flex-1 overflow-auto border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] min-h-[300px]">
 									{batchPreview.results
 										.filter((result) => result.fixed)
-										.map((result, index) => (
-												<div key={index} className="border-b border-[var(--vscode-panel-border)] last:border-b-0">
-													<div className="sticky top-0 bg-[var(--vscode-editor-background)] px-3 py-2 text-xs font-medium border-b border-[var(--vscode-panel-border)]">
-														{result.filePath}
-													</div>
-													<pre className="text-xs font-mono p-3 whitespace-pre">{result.diff || result.fixedContent}</pre>
+										.map((result, _index) => (
+											<div
+												className="border-b border-[var(--vscode-panel-border)] last:border-b-0"
+												key={result.filePath}>
+												<div className="sticky top-0 bg-[var(--vscode-editor-background)] px-3 py-2 text-xs font-medium border-b border-[var(--vscode-panel-border)]">
+													{result.filePath}
 												</div>
-											))}
+												<pre className="text-xs font-mono p-3 whitespace-pre">
+													{result.diff || result.fixedContent}
+												</pre>
+											</div>
+										))}
 								</div>
 								<div className="flex justify-end gap-2 mt-3">
 									<VSCodeButton appearance="secondary" onClick={() => setBatchPreview(null)}>
 										Cancel
 									</VSCodeButton>
-									<VSCodeButton appearance="primary" onClick={handleApplyAllFixes} disabled={batchFixing}>
+									<VSCodeButton appearance="primary" disabled={batchFixing} onClick={handleApplyAllFixes}>
 										{batchFixing ? "Applying..." : "Apply All Fixes"}
 									</VSCodeButton>
 								</div>

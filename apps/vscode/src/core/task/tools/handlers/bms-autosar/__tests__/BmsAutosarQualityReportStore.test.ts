@@ -1,10 +1,6 @@
 import { strict as assert } from "node:assert"
 import { describe, it } from "mocha"
-import {
-	clearQualityReport,
-	getQualityReport,
-	upsertQualityReportFile,
-} from "../BmsAutosarQualityReportStore"
+import { clearQualityReport, getQualityReport, upsertQualityReportFile } from "../BmsAutosarQualityReportStore"
 
 describe("BmsAutosarQualityReportStore", () => {
 	it("stores and retrieves a quality report", () => {

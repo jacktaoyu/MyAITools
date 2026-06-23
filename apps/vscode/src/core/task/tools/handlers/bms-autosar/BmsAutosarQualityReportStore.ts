@@ -45,11 +45,7 @@ export function clearQualityReport(cwd: string): void {
 	store.delete(makeKey(cwd))
 }
 
-export function upsertQualityReportFile(
-	cwd: string,
-	filePath: string,
-	issues: QualityReportIssue[],
-): QualityReport {
+export function upsertQualityReportFile(cwd: string, filePath: string, issues: QualityReportIssue[]): QualityReport {
 	const key = makeKey(cwd)
 	const existing = store.get(key)
 	const now = new Date().toISOString()
@@ -92,5 +88,12 @@ export function addQualityReportFiles(
 	for (const { filePath, issues } of results) {
 		upsertQualityReportFile(cwd, filePath, issues)
 	}
-	return store.get(makeKey(cwd))!
+	return (
+		store.get(makeKey(cwd)) ?? {
+			cwd,
+			files: [],
+			summary: { errors: 0, warnings: 0, info: 0, total: 0 },
+			updatedAt: new Date().toISOString(),
+		}
+	)
 }

@@ -153,7 +153,10 @@ interface ComponentTypeRule {
 
 const COMPONENT_TYPE_RULES: ComponentTypeRule[] = [
 	{ patterns: [/\bcsc\b|cell\s+supervision|afe\s+slave|slave\s+ic/i], componentType: "bms_csc" },
-	{ patterns: [/bms\s+controller|contactor\s+control|hv\s+state|pre[-\s]?charge|mode\s+manager/i], componentType: "bms_controller" },
+	{
+		patterns: [/bms\s+controller|contactor\s+control|hv\s+state|pre[-\s]?charge|mode\s+manager/i],
+		componentType: "bms_controller",
+	},
 	{ patterns: [/cell\s+balanc|equalization/i], componentType: "bms_balancer" },
 	{ patterns: [/thermal\s+manager|cooling|heating|thermal\s+runaway/i], componentType: "bms_thermal_manager" },
 	{ patterns: [/charger|charge\s+control|cc\/cv/i], componentType: "bms_charger" },

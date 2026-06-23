@@ -63,6 +63,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	showBmsAutosarWizard: boolean
 	showBmsAutosarQualityReport: boolean
 	showBmsAutosarKnowledgeGraph: boolean
+	showBmsAutosarCompileManager: boolean
 	expandTaskHeader: boolean
 
 	// Setters
@@ -92,6 +93,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setShowBmsAutosarWizard: (value: boolean) => void
 	setShowBmsAutosarQualityReport: (value: boolean) => void
 	setShowBmsAutosarKnowledgeGraph: (value: boolean) => void
+	setShowBmsAutosarCompileManager: (value: boolean) => void
 
 	// Refresh functions
 	refreshClineModels: () => void
@@ -115,6 +117,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	navigateToBmsAutosarWizard: () => void
 	navigateToBmsAutosarQualityReport: () => void
 	navigateToBmsAutosarKnowledgeGraph: () => void
+	openBmsAutosarCompileManager: () => void
 	navigateToChat: () => void
 
 	// Hide functions
@@ -150,6 +153,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [showBmsAutosarWizard, setShowBmsAutosarWizard] = useState(false)
 	const [showBmsAutosarQualityReport, setShowBmsAutosarQualityReport] = useState(false)
 	const [showBmsAutosarKnowledgeGraph, setShowBmsAutosarKnowledgeGraph] = useState(false)
+	const [showBmsAutosarCompileManager, setShowBmsAutosarCompileManager] = useState(false)
 
 	// Helper for MCP view
 	const closeMcpView = useCallback(() => {
@@ -297,6 +301,18 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowBmsAutosarKnowledgeGraph(true)
 	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowWorktrees, setShowBmsAutosarWizard, setShowBmsAutosarQualityReport, setShowBmsAutosarKnowledgeGraph])
 
+	const openBmsAutosarCompileManager = useCallback(() => {
+		setShowSettings(false)
+		closeMcpView()
+		setShowHistory(false)
+		setShowAccount(false)
+		setShowWorktrees(false)
+		setShowBmsAutosarWizard(false)
+		setShowBmsAutosarQualityReport(false)
+		setShowBmsAutosarKnowledgeGraph(false)
+		setShowBmsAutosarCompileManager(true)
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowWorktrees, setShowBmsAutosarWizard, setShowBmsAutosarQualityReport, setShowBmsAutosarKnowledgeGraph, setShowBmsAutosarCompileManager])
+
 	const navigateToChat = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
@@ -415,6 +431,8 @@ export const ExtensionStateContextProvider: React.FC<{
 	const worktreesButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const bmsAutosarQualityReportUnsubscribeRef = useRef<(() => void) | null>(null)
 	const bmsAutosarKnowledgeGraphUnsubscribeRef = useRef<(() => void) | null>(null)
+	const bmsAutosarCompileUnsubscribeRef = useRef<(() => void) | null>(null)
+	const bmsAutosarGeneratorUnsubscribeRef = useRef<(() => void) | null>(null)
 	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
 	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
 	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -621,6 +639,40 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		)
 
+		// Subscribe to BMS AUTOSAR compile manager open events
+		bmsAutosarCompileUnsubscribeRef.current = UiServiceClient.subscribeToBmsAutosarCompile(
+			EmptyRequest.create({}),
+			{
+				onResponse: () => {
+					console.log("[DEBUG] Received BMS AUTOSAR compile event from gRPC stream")
+					openBmsAutosarCompileManager()
+				},
+				onError: (error) => {
+					console.error("Error in BMS AUTOSAR compile subscription:", error)
+				},
+				onComplete: () => {
+					console.log("BMS AUTOSAR compile subscription completed")
+				},
+			},
+		)
+
+		// Subscribe to BMS AUTOSAR generator (wizard) open events
+		bmsAutosarGeneratorUnsubscribeRef.current = UiServiceClient.subscribeToBmsAutosarGenerator(
+			EmptyRequest.create({}),
+			{
+				onResponse: () => {
+					console.log("[DEBUG] Received BMS AUTOSAR generator event from gRPC stream")
+					navigateToBmsAutosarWizard()
+				},
+				onError: (error) => {
+					console.error("Error in BMS AUTOSAR generator subscription:", error)
+				},
+				onComplete: () => {
+					console.log("BMS AUTOSAR generator subscription completed")
+				},
+			},
+		)
+
 		// Subscribe to partial message events
 		partialMessageUnsubscribeRef.current = UiServiceClient.subscribeToPartialMessage(EmptyRequest.create({}), {
 			onResponse: (protoMessage) => {
@@ -784,6 +836,14 @@ export const ExtensionStateContextProvider: React.FC<{
 				bmsAutosarKnowledgeGraphUnsubscribeRef.current()
 				bmsAutosarKnowledgeGraphUnsubscribeRef.current = null
 			}
+			if (bmsAutosarCompileUnsubscribeRef.current) {
+				bmsAutosarCompileUnsubscribeRef.current()
+				bmsAutosarCompileUnsubscribeRef.current = null
+			}
+			if (bmsAutosarGeneratorUnsubscribeRef.current) {
+				bmsAutosarGeneratorUnsubscribeRef.current()
+				bmsAutosarGeneratorUnsubscribeRef.current = null
+			}
 			if (partialMessageUnsubscribeRef.current) {
 				partialMessageUnsubscribeRef.current()
 				partialMessageUnsubscribeRef.current = null
@@ -940,6 +1000,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		showBmsAutosarWizard,
 		showBmsAutosarQualityReport,
 		showBmsAutosarKnowledgeGraph,
+		showBmsAutosarCompileManager,
 		globalClineRulesToggles: state.globalClineRulesToggles || {},
 		localClineRulesToggles: state.localClineRulesToggles || {},
 		localCursorRulesToggles: state.localCursorRulesToggles || {},
@@ -962,6 +1023,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToBmsAutosarWizard,
 		navigateToBmsAutosarQualityReport,
 		navigateToBmsAutosarKnowledgeGraph,
+		openBmsAutosarCompileManager,
 		navigateToChat,
 
 		// Hide functions
@@ -979,6 +1041,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowBmsAutosarWizard,
 		setShowBmsAutosarQualityReport,
 		setShowBmsAutosarKnowledgeGraph,
+		setShowBmsAutosarCompileManager,
 		setShouldShowAnnouncement: (value) =>
 			setState((prevState) => ({
 				...prevState,

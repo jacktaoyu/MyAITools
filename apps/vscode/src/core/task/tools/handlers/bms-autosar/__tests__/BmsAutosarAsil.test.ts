@@ -1,13 +1,6 @@
 import { strict as assert } from "node:assert"
 import { describe, it } from "mocha"
-import {
-	DEFAULT_ASIL_LEVEL,
-	asilLabel,
-	getAsilDesignGuidelines,
-	isAsil,
-	isHighAsil,
-	normalizeAsilLevel,
-} from "../BmsAutosarAsil"
+import { asilLabel, DEFAULT_ASIL_LEVEL, getAsilDesignGuidelines, isAsil, isHighAsil, normalizeAsilLevel } from "../BmsAutosarAsil"
 
 describe("BmsAutosarAsil", () => {
 	describe("normalizeAsilLevel", () => {

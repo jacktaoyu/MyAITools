@@ -4,6 +4,12 @@ export interface BmsAutosarKnowledgeEmbedding {
 	contentHash: string
 }
 
+export interface BmsAutosarKnowledgeLocation {
+	path?: string
+	page?: number
+	chapter?: string
+}
+
 export interface BmsAutosarKnowledgeEntry {
 	topic: string
 	content: string
@@ -13,6 +19,16 @@ export interface BmsAutosarKnowledgeEntry {
 	/** Files that contributed to this entry (e.g. folder import sources). */
 	sourceFiles?: string[]
 	embedding?: BmsAutosarKnowledgeEmbedding
+	/** Primary source file path for this entry (relative or absolute). */
+	sourcePath?: string
+	/** SHA-256 of the source file content. */
+	sourceHash?: string
+	/** Source file mtime in milliseconds. */
+	sourceMtimeMs?: number
+	/** Source file size in bytes. */
+	sourceSize?: number
+	/** Optional page/chapter locations (e.g. PDF page or DOCX heading). */
+	locations?: BmsAutosarKnowledgeLocation[]
 }
 
 export interface BmsAutosarKnowledgeFile {
@@ -106,7 +122,7 @@ export function chunkBmsAutosarText(text: string, maxChunkChars = MAX_CHUNK_CHAR
 					current += (current ? "\n" : "") + line
 				}
 			}
-		} else if ((current + "\n" + trimmedPart).length > maxChunkChars) {
+		} else if (`${current}\n${trimmedPart}`.length > maxChunkChars) {
 			flush(true)
 			current = trimmedPart
 		} else {

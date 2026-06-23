@@ -1,13 +1,13 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { ApiConfiguration } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
 import { getClineHomePath } from "@/core/storage/disk"
 import { telemetryService } from "@/services/telemetry"
 import { createEmbedding, type EmbeddingResult, hashContent } from "./BmsAutosarEmbeddingService"
-import type { BmsAutosarKnowledgeFile, BmsAutosarKnowledgeSource } from "./BmsAutosarKnowledgeTypes"
-import type { ApiConfiguration } from "@shared/api"
-import type { BmsAutosarTemplates } from "./BmsAutosarTemplateRenderer"
 import type { ArxmlEdge, ArxmlGraph, ArxmlNode } from "./BmsAutosarKnowledgeGraph"
+import type { BmsAutosarKnowledgeEntry, BmsAutosarKnowledgeFile, BmsAutosarKnowledgeSource } from "./BmsAutosarKnowledgeTypes"
+import type { BmsAutosarTemplates } from "./BmsAutosarTemplateRenderer"
 
 interface TemplatesCacheEntry {
 	mtimeMs: number
@@ -382,6 +382,68 @@ export async function saveArxmlGraphCached(filePath: string, mtimeMs: number, gr
 	} catch {
 		// Disk cache is best-effort.
 	}
+}
+
+function _getVectorCacheDir(): string {
+	return path.join(getDiskCacheDir(), "vectors")
+}
+
+function vectorCacheFileName(contentHash: string, model: string): string {
+	// Sanitize model name so it is safe as a filename segment.
+	const safeModel = model.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 64)
+	return `${contentHash}.${safeModel}.json`
+}
+
+/**
+ * Loads a cached embedding vector from disk by content hash + model.
+ */
+export async function loadVectorCached(contentHash: string, model: string): Promise<number[] | undefined> {
+	try {
+		const dir = await ensureDiskCacheDir()
+		const vectorsDir = path.join(dir, "vectors")
+		await fs.mkdir(vectorsDir, { recursive: true })
+		const cachePath = path.join(vectorsDir, vectorCacheFileName(contentHash, model))
+		if (!(await fileExistsAtPath(cachePath))) {
+			return undefined
+		}
+		const raw = await fs.readFile(cachePath, "utf-8")
+		const parsed = JSON.parse(raw) as { vector: number[]; model: string; contentHash: string }
+		if (!Array.isArray(parsed.vector) || parsed.model !== model || parsed.contentHash !== contentHash) {
+			return undefined
+		}
+		return parsed.vector
+	} catch {
+		return undefined
+	}
+}
+
+/**
+ * Persists an embedding vector to disk keyed by content hash + model.
+ */
+export async function saveVectorCached(contentHash: string, model: string, vector: number[]): Promise<void> {
+	try {
+		const dir = await ensureDiskCacheDir()
+		const vectorsDir = path.join(dir, "vectors")
+		await fs.mkdir(vectorsDir, { recursive: true })
+		const cachePath = path.join(vectorsDir, vectorCacheFileName(contentHash, model))
+		await fs.writeFile(cachePath, JSON.stringify({ vector, model, contentHash }), "utf-8")
+	} catch {
+		// Disk cache is best-effort.
+	}
+}
+
+/**
+ * Migrates an in-entry embedding to the separate vector cache and removes it
+ * from the entry. Returns true if a migration happened.
+ */
+export async function migrateEntryEmbeddingToVectorCache(entry: BmsAutosarKnowledgeEntry): Promise<boolean> {
+	const embedded = entry.embedding
+	if (!embedded || !Array.isArray(embedded.vector)) {
+		return false
+	}
+	await saveVectorCached(embedded.contentHash, embedded.model, embedded.vector)
+	delete entry.embedding
+	return true
 }
 
 export function invalidateBmsAutosarKnowledgeCache(filePath?: string): void {

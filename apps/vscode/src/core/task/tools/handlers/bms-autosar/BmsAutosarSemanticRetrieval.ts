@@ -1,15 +1,15 @@
+import type { ApiConfiguration } from "@shared/api"
 import fs from "fs/promises"
 import * as path from "path"
 import { telemetryService } from "@/services/telemetry"
-import type { ApiConfiguration } from "@shared/api"
-import type { BmsAutosarKnowledgeEntry, BmsAutosarKnowledgeFile, BmsAutosarKnowledgeSource } from "./BmsAutosarKnowledgeTypes"
 import { createEmbeddings, DEFAULT_EMBEDDING_MODEL, hashContent } from "./BmsAutosarEmbeddingService"
-import { computeBm25IndexInWorker, computeBm25ScoresInWorker, type Bm25Index } from "./BmsAutosarRetrievalWorker"
-import { BM25_B, BM25_K1, STOP_WORDS } from "./BmsAutosarRetrievalConstants"
-import { getCachedQueryEmbedding, getCachedLexicalIndex } from "./BmsAutosarKnowledgeCache"
+import { getCachedLexicalIndex, getCachedQueryEmbedding, loadVectorCached, saveVectorCached } from "./BmsAutosarKnowledgeCache"
 import { buildArxmlKnowledgeGraph, rankByGraphProximity } from "./BmsAutosarKnowledgeGraph"
+import type { BmsAutosarKnowledgeEntry, BmsAutosarKnowledgeSource } from "./BmsAutosarKnowledgeTypes"
 import { expandAutosarQuery } from "./BmsAutosarQueryExpander"
 import { rerankWithLlm } from "./BmsAutosarReranker"
+import { BM25_B, BM25_K1, STOP_WORDS } from "./BmsAutosarRetrievalConstants"
+import { type Bm25Index, computeBm25IndexInWorker, computeBm25ScoresInWorker } from "./BmsAutosarRetrievalWorker"
 
 const DEFAULT_HYBRID_WEIGHT = 0.7
 const LEXICAL_WORKER_THRESHOLD = 100
@@ -127,18 +127,10 @@ function normalizeScores(scores: number[]): number[] {
 }
 
 function normalizeFilterValues(values: string[] | undefined): Set<string> {
-	return new Set(
-		(values || [])
-			.map((value) => value.trim().toLowerCase())
-			.filter(Boolean),
-	)
+	return new Set((values || []).map((value) => value.trim().toLowerCase()).filter(Boolean))
 }
 
-function entryMatchesFilters(
-	entry: BmsAutosarKnowledgeEntry,
-	tags: Set<string>,
-	sourceFiles: Set<string>,
-): boolean {
+function entryMatchesFilters(entry: BmsAutosarKnowledgeEntry, tags: Set<string>, sourceFiles: Set<string>): boolean {
 	if (tags.size === 0 && sourceFiles.size === 0) {
 		return true
 	}
@@ -149,8 +141,7 @@ function entryMatchesFilters(
 	}
 
 	const matchesSourceFile =
-		sourceFiles.size === 0 ||
-		(entry.sourceFiles || []).some((file) => sourceFiles.has(file.trim().toLowerCase()))
+		sourceFiles.size === 0 || (entry.sourceFiles || []).some((file) => sourceFiles.has(file.trim().toLowerCase()))
 	return matchesSourceFile
 }
 
@@ -184,26 +175,6 @@ function clampHybridWeight(weight: number | undefined): number {
 	return Math.max(0, Math.min(1, weight))
 }
 
-async function persistSourceEmbeddings(source: BmsAutosarKnowledgeSource): Promise<void> {
-	try {
-		let version = "1.0.0"
-		try {
-			const existing = await fs.readFile(source.path, "utf-8")
-			const parsed = JSON.parse(existing) as Partial<BmsAutosarKnowledgeFile>
-			if (parsed.version) {
-				version = parsed.version
-			}
-		} catch {
-			// use default version
-		}
-		await fs.mkdir(path.dirname(source.path), { recursive: true })
-		const data: BmsAutosarKnowledgeFile = { version, entries: source.entries }
-		await fs.writeFile(source.path, JSON.stringify(data, null, 2), "utf-8")
-	} catch {
-		// Embedding cache persistence is best-effort.
-	}
-}
-
 async function computeEmbeddingScores(
 	sources: BmsAutosarKnowledgeSource[],
 	query: string,
@@ -221,23 +192,32 @@ async function computeEmbeddingScores(
 	}
 
 	const textsToEmbed: string[] = []
-	const entriesToEmbed: BmsAutosarKnowledgeEntry[] = []
+	const hashesToEmbed: string[] = []
 
-	entries.forEach((entry) => {
-		const currentHash = hashContent(entry.content)
-		const cached = entry.embedding
-		if (!cached || cached.model !== model || cached.contentHash !== currentHash) {
-			textsToEmbed.push(entryText(entry))
-			entriesToEmbed.push(entry)
-		}
-	})
+	// Resolve which entries need fresh embeddings by querying the vector cache.
+	const entryVectors = new Map<BmsAutosarKnowledgeEntry, number[]>()
+	await Promise.all(
+		entries.map(async (entry) => {
+			const currentHash = hashContent(entry.content)
+			const cachedVector = await loadVectorCached(currentHash, model)
+			if (cachedVector) {
+				entryVectors.set(entry, cachedVector)
+			} else {
+				textsToEmbed.push(entryText(entry))
+				hashesToEmbed.push(currentHash)
+			}
+		}),
+	)
 
 	let anyNew = false
-	if (entriesToEmbed.length > 0) {
+	if (textsToEmbed.length > 0) {
 		const embeddings = await createEmbeddings(textsToEmbed, { apiConfiguration, model })
 		embeddings.forEach((embedding, index) => {
 			if (embedding) {
-				entriesToEmbed[index].embedding = embedding
+				entryVectors.set(entries[index], embedding.vector)
+				saveVectorCached(hashesToEmbed[index], model, embedding.vector).catch(() => {
+					// Vector cache persistence is best-effort.
+				})
 				anyNew = true
 			}
 		})
@@ -248,10 +228,11 @@ async function computeEmbeddingScores(
 	let scoredCount = 0
 
 	for (const entry of entries) {
-		if (!entry.embedding || entry.embedding.model !== model) {
+		const vector = entryVectors.get(entry)
+		if (!vector) {
 			continue
 		}
-		scores.set(entry, cosineSimilarity(queryVector, entry.embedding.vector))
+		scores.set(entry, cosineSimilarity(queryVector, vector))
 		scoredCount++
 	}
 
@@ -300,9 +281,7 @@ async function computeLexicalScores(
  * retrievals. Lexical relevance is always computed with BM25 and fused with the
  * embedding score using the configured hybrid weight.
  */
-export async function retrieveRelevantKnowledgeResults(
-	options: SemanticRetrievalOptions,
-): Promise<RetrievalResult[]> {
+export async function retrieveRelevantKnowledgeResults(options: SemanticRetrievalOptions): Promise<RetrievalResult[]> {
 	const {
 		sources,
 		query,
@@ -333,20 +312,16 @@ export async function retrieveRelevantKnowledgeResults(
 	const { expanded: expandedQuery } = expandAutosarQuery(query)
 
 	let embeddingScores: Map<BmsAutosarKnowledgeEntry, number> | undefined
-	let embeddingAnyNew = false
+	let _embeddingAnyNew = false
 
 	try {
 		const embeddingResult = await computeEmbeddingScores(filteredSources, expandedQuery, apiConfiguration, embeddingModel)
 		if (embeddingResult) {
 			embeddingScores = embeddingResult.scores
-			embeddingAnyNew = embeddingResult.anyNew
+			_embeddingAnyNew = embeddingResult.anyNew
 		}
 	} catch {
 		embeddingScores = undefined
-	}
-
-	if (embeddingAnyNew) {
-		await Promise.all(filteredSources.map((source) => persistSourceEmbeddings(source)))
 	}
 
 	const lexicalScores = await computeLexicalScores(filteredSources, entries, expandedQuery)
@@ -472,9 +447,7 @@ async function computeGraphBoosts(
 /**
  * Backwards-compatible wrapper that returns only the knowledge entries.
  */
-export async function retrieveRelevantKnowledgeEntries(
-	options: SemanticRetrievalOptions,
-): Promise<BmsAutosarKnowledgeEntry[]> {
+export async function retrieveRelevantKnowledgeEntries(options: SemanticRetrievalOptions): Promise<BmsAutosarKnowledgeEntry[]> {
 	const results = await retrieveRelevantKnowledgeResults(options)
 	return results.map((result) => result.entry)
 }

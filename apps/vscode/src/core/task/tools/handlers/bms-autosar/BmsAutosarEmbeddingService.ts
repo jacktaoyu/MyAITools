@@ -1,9 +1,9 @@
-import { createHash } from "crypto"
-import { Ollama, type Config } from "ollama"
 import type { ApiConfiguration } from "@shared/api"
+import { createConcurrencyLimit } from "@utils/concurrency"
+import { createHash } from "crypto"
+import { type Config, Ollama } from "ollama"
 import { createOpenAIClient } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { createConcurrencyLimit } from "@utils/concurrency"
 
 export const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 export const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
@@ -44,11 +44,7 @@ function canUseOllamaEmbedding(apiConfiguration: ApiConfiguration): boolean {
 	if (canUseOpenAiEmbedding(apiConfiguration)) {
 		return false
 	}
-	return !!(
-		apiConfiguration.ollamaBaseUrl ||
-		apiConfiguration.actModeOllamaModelId ||
-		apiConfiguration.planModeOllamaModelId
-	)
+	return !!(apiConfiguration.ollamaBaseUrl || apiConfiguration.actModeOllamaModelId || apiConfiguration.planModeOllamaModelId)
 }
 
 function getOllamaEmbeddingModel(apiConfiguration: ApiConfiguration): string {
@@ -157,19 +153,14 @@ export async function createEmbedding(text: string, options: EmbeddingOptions): 
  * Creates embeddings for multiple texts in a single batch request.
  * Returns undefined for any text that could not be embedded.
  */
-export async function createEmbeddings(
-	texts: string[],
-	options: EmbeddingOptions,
-): Promise<(EmbeddingResult | undefined)[]> {
+export async function createEmbeddings(texts: string[], options: EmbeddingOptions): Promise<(EmbeddingResult | undefined)[]> {
 	const model = options.model ?? DEFAULT_EMBEDDING_MODEL
 	if (texts.length === 0) {
 		return []
 	}
 
 	if (canUseOpenAiEmbedding(options.apiConfiguration)) {
-		const indexed = texts
-			.map((text, index) => ({ text: text.trim(), index }))
-			.filter(({ text }) => text.length > 0)
+		const indexed = texts.map((text, index) => ({ text: text.trim(), index })).filter(({ text }) => text.length > 0)
 
 		if (indexed.length === 0) {
 			return texts.map(() => undefined)

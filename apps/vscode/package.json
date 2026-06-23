@@ -45,6 +45,11 @@
 		"onCommand:cline.addToChat",
 		"onCommand:cline.focusChatInput",
 		"onCommand:cline.generateGitCommitMessage",
+		"onCommand:cline.bmsAutosarGenerate",
+		"onCommand:cline.bmsAutosarQualityReport",
+		"onCommand:cline.bmsAutosarKnowledgeGraph",
+		"onCommand:cline.bmsAutosar.openCompile",
+		"onCommand:cline.bmsAutosar.openGenerator",
 		"onUri",
 		"workspaceContains:evals.env"
 	],
@@ -252,6 +257,18 @@
 				"icon": "$(graph)"
 			},
 			{
+				"command": "cline.bmsAutosar.openCompile",
+				"title": "Open BMS AUTOSAR Compile Manager",
+				"category": "Cline",
+				"icon": "$(tools)"
+			},
+			{
+				"command": "cline.bmsAutosar.openGenerator",
+				"title": "Open BMS AUTOSAR Generator",
+				"category": "Cline",
+				"icon": "$(sparkle)"
+			},
+			{
 				"command": "cline.reviewComment.reply",
 				"title": "Reply",
 				"category": "Cline",
@@ -289,6 +306,18 @@
 				"win": "ctrl+'",
 				"linux": "ctrl+'",
 				"when": "!editorHasSelection"
+			},
+			{
+				"command": "cline.bmsAutosar.openCompile",
+				"key": "ctrl+shift+b",
+				"mac": "cmd+shift+b",
+				"when": "view == claude-dev.SidebarProvider"
+			},
+			{
+				"command": "cline.bmsAutosar.openGenerator",
+				"key": "ctrl+shift+g",
+				"mac": "cmd+shift+g",
+				"when": "view == claude-dev.SidebarProvider"
 			}
 		],
 		"menus": {

@@ -78,7 +78,12 @@ export const COMPONENT_PRESETS: Record<string, WizardPreset> = {
 		portsJson: JSON.stringify(
 			[
 				{ name: "CellVoltage_Slave", direction: "provided", interface_type: "S/R", data_type: "Adc_VoltageType" },
-				{ name: "CellTemperature_Slave", direction: "provided", interface_type: "S/R", data_type: "Temperature_DegCType" },
+				{
+					name: "CellTemperature_Slave",
+					direction: "provided",
+					interface_type: "S/R",
+					data_type: "Temperature_DegCType",
+				},
 				{ name: "AlertStatus", direction: "provided", interface_type: "S/R", data_type: "uint8" },
 			],
 			null,

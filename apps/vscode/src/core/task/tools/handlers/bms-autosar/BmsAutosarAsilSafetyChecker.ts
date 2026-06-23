@@ -1,4 +1,4 @@
-import { isHighAsil, normalizeAsilLevel, type AsilLevel } from "./BmsAutosarAsil"
+import { type AsilLevel, isHighAsil, normalizeAsilLevel } from "./BmsAutosarAsil"
 
 export interface AsilSafetyIssue {
 	rule: string
@@ -8,7 +8,7 @@ export interface AsilSafetyIssue {
 	category: "ASIL"
 }
 
-const ASIL_LEVEL_COMMENT_REGEX = /\\ASIL\s+level:\s*(QM|ASIL[_\s\-][ABCD])/i
+const ASIL_LEVEL_COMMENT_REGEX = /\\ASIL\s+level:\s*(QM|ASIL[_\s-][ABCD])/i
 
 /**
  * Infer the ASIL level from a generated file's Doxygen /ASIL level tag.
@@ -33,8 +33,7 @@ function stripCComments(content: string): string {
 function findFunctionBodies(content: string): Array<{ name: string; body: string; startOffset: number }> {
 	const bodies: Array<{ name: string; body: string; startOffset: number }> = []
 	const regex = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*\{/g
-	let match: RegExpExecArray | null
-	while ((match = regex.exec(content)) !== null) {
+	for (const match of content.matchAll(regex)) {
 		const start = match.index + match[0].length
 		const name = match[1]
 		let depth = 1
@@ -99,7 +98,7 @@ export function runAsilSafetyChecks(content: string, asilLevel?: AsilLevel): Asi
 	// SAFETY-RANGE: heuristic check for range/bounds validation in function bodies.
 	const functionBlocks = findFunctionBodies(stripped)
 	let hasRangeCheck = false
-	for (const { body, startOffset } of functionBlocks) {
+	for (const { body } of functionBlocks) {
 		// Look for comparisons that could indicate input/output validation.
 		if (/\bif\s*\([^)]*(<|>|<=|>=|==|!=)[^)]*\)/.test(body)) {
 			hasRangeCheck = true

@@ -9,6 +9,8 @@ import PDFParser from "pdf2json"
 import { truncateContent } from "@/shared/content-limits"
 import { Logger } from "@/shared/services/Logger"
 import { createConcurrencyLimit } from "@utils/concurrency"
+import type { BmsAutosarKnowledgeLocation } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes"
+import { dbcToText, parseDbc } from "@core/task/tools/handlers/bms-autosar/BmsAutosarDbcParser"
 import { sanitizeNotebookForLLM } from "./notebook-utils"
 
 export async function detectEncoding(fileBuffer: Buffer, fileExtension?: string): Promise<string> {
@@ -28,6 +30,11 @@ export async function detectEncoding(fileBuffer: Buffer, fileExtension?: string)
 	}
 }
 
+export interface ExtractTextResult {
+	text: string
+	locations: BmsAutosarKnowledgeLocation[]
+}
+
 export async function extractTextFromFile(filePath: string): Promise<string> {
 	try {
 		await fs.access(filePath)
@@ -36,6 +43,29 @@ export async function extractTextFromFile(filePath: string): Promise<string> {
 	}
 
 	return callTextExtractionFunctions(filePath)
+}
+
+export async function extractTextFromFileWithLocations(filePath: string): Promise<ExtractTextResult> {
+	try {
+		await fs.access(filePath)
+	} catch (_error) {
+		throw new Error(`File not found: ${filePath}`)
+	}
+
+	const fileExtension = path.extname(filePath).toLowerCase()
+
+	if (fileExtension === ".pdf") {
+		const result = await extractTextFromPDFWithPages(filePath)
+		return { text: truncateContent(result.text), locations: result.locations }
+	}
+
+	if (fileExtension === ".docx") {
+		const result = await extractTextFromDOCXWithChapters(filePath)
+		return { text: truncateContent(result.text), locations: result.locations }
+	}
+
+	const text = await callTextExtractionFunctions(filePath)
+	return { text, locations: [] }
 }
 
 /**
@@ -60,6 +90,9 @@ export async function callTextExtractionFunctions(filePath: string): Promise<str
 		case ".xlsx":
 			content = await extractTextFromExcel(filePath)
 			break
+		case ".dbc":
+			content = await extractTextFromDBC(filePath)
+			break
 		default:
 			// Check file size with stat() first - faster than reading entire file for size check
 			const fileStat = await fs.stat(filePath)
@@ -76,7 +109,24 @@ export async function callTextExtractionFunctions(filePath: string): Promise<str
 	return truncateContent(content)
 }
 
-async function extractTextFromPDF(filePath: string): Promise<string> {
+interface PdfParserPage {
+	Texts?: Array<{ R?: Array<{ T?: string }> }>
+}
+
+interface PdfParserData {
+	Pages?: PdfParserPage[]
+}
+
+function extractTextFromPdfPage(page: PdfParserPage): string {
+	const texts = page.Texts || []
+	return texts
+		.map((text) => (text.R || []).map((run) => decodeURIComponent(run.T || "")).join(""))
+		.join(" ")
+}
+
+async function extractTextFromPDFWithPages(
+	filePath: string,
+): Promise<{ text: string; locations: BmsAutosarKnowledgeLocation[] }> {
 	const dataBuffer = await fs.readFile(filePath)
 
 	return new Promise((resolve, reject) => {
@@ -84,7 +134,20 @@ async function extractTextFromPDF(filePath: string): Promise<string> {
 
 		parser.on("pdfParser_dataReady", () => {
 			try {
-				resolve(parser.getRawTextContent())
+				const data = (parser.data ?? {}) as PdfParserData
+				const pages = data.Pages || []
+				const locations: BmsAutosarKnowledgeLocation[] = []
+				const parts: string[] = []
+				pages.forEach((page, index) => {
+					const pageNum = index + 1
+					const pageText = extractTextFromPdfPage(page).trim()
+					if (pageText) {
+						parts.push(`--- Page ${pageNum} ---`)
+						parts.push(pageText)
+						locations.push({ page: pageNum })
+					}
+				})
+				resolve({ text: parts.join("\n"), locations })
 			} catch (err) {
 				reject(err)
 			} finally {
@@ -101,9 +164,51 @@ async function extractTextFromPDF(filePath: string): Promise<string> {
 	})
 }
 
+async function extractTextFromPDF(filePath: string): Promise<string> {
+	const { text } = await extractTextFromPDFWithPages(filePath)
+	return text
+}
+
+function stripHtmlTags(html: string): string {
+	return html
+		.replace(/<[^>]+>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+}
+
+async function extractTextFromDOCXWithChapters(
+	filePath: string,
+): Promise<{ text: string; locations: BmsAutosarKnowledgeLocation[] }> {
+	const result = await mammoth.convertToHtml(
+		{ path: filePath },
+		{
+			styleMap: ["p.Heading1 => h1", "p.Heading2 => h2", "p.Heading3 => h3"],
+		},
+	)
+	let html = result.value
+	// Insert chapter markers around headings before stripping tags.
+	html = html
+		.replace(/<h1[^>]*>(.*?)<\/h1>/gi, (_match, title) => `\n--- Chapter: ${stripHtmlTags(title)} ---\n${stripHtmlTags(title)}\n`)
+		.replace(/<h2[^>]*>(.*?)<\/h2>/gi, (_match, title) => `\n--- Section: ${stripHtmlTags(title)} ---\n${stripHtmlTags(title)}\n`)
+	const text = stripHtmlTags(html)
+	const locations: BmsAutosarKnowledgeLocation[] = []
+	const chapterRegex = /--- (?:Chapter|Section):\s*(.+?) ---/g
+	let match: RegExpExecArray | null
+	while ((match = chapterRegex.exec(text)) !== null) {
+		locations.push({ chapter: match[1].trim() })
+	}
+	return { text, locations }
+}
+
 async function extractTextFromDOCX(filePath: string): Promise<string> {
-	const result = await mammoth.extractRawText({ path: filePath })
-	return result.value
+	const { text } = await extractTextFromDOCXWithChapters(filePath)
+	return text
+}
+
+async function extractTextFromDBC(filePath: string): Promise<string> {
+	const content = await fs.readFile(filePath, "utf-8")
+	const dbc = parseDbc(content)
+	return dbcToText(dbc)
 }
 
 async function extractTextFromIPYNB(filePath: string): Promise<string> {
@@ -261,8 +366,9 @@ export const KNOWLEDGE_IMPORT_EXTENSIONS = new Set([
 	".ini",
 	".cfg",
 	".conf",
-	// AUTOSAR / notebooks / logs
+	// AUTOSAR / CAN / notebooks / logs
 	".arxml",
+	".dbc",
 	".ipynb",
 	".log",
 ])

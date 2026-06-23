@@ -1,4 +1,4 @@
-import { buildApiHandler, type ApiHandler } from "@core/api"
+import { type ApiHandler, buildApiHandler } from "@core/api"
 import type { ApiConfiguration } from "@shared/api"
 import { Logger } from "@/shared/services/Logger"
 import type { BmsAutosarKnowledgeEntry } from "./BmsAutosarKnowledgeTypes"
@@ -60,11 +60,7 @@ function buildRerankPrompt(query: string, candidates: RerankCandidate[]): string
 	return lines.join("\n")
 }
 
-async function callLlmForScores(
-	api: ApiHandler,
-	query: string,
-	candidates: RerankCandidate[],
-): Promise<number[]> {
+async function callLlmForScores(api: ApiHandler, query: string, candidates: RerankCandidate[]): Promise<number[]> {
 	const prompt = buildRerankPrompt(query, candidates)
 	const stream = api.createMessage(RERANK_SYSTEM_PROMPT, [{ role: "user", content: prompt }])
 
@@ -125,7 +121,13 @@ async function createRerankApiHandler(apiConfiguration: ApiConfiguration): Promi
  * candidates fall back to their stage-one scores unchanged.
  */
 export async function rerankWithLlm(options: RerankerOptions): Promise<RerankResult[]> {
-	const { query, candidates, apiConfiguration, maxCandidates = DEFAULT_MAX_CANDIDATES, llmWeight = DEFAULT_LLM_WEIGHT } = options
+	const {
+		query,
+		candidates,
+		apiConfiguration,
+		maxCandidates = DEFAULT_MAX_CANDIDATES,
+		llmWeight = DEFAULT_LLM_WEIGHT,
+	} = options
 	if (candidates.length === 0) {
 		return []
 	}

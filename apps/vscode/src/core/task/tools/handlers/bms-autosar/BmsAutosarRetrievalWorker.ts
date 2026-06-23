@@ -73,7 +73,7 @@ parentPort.once("message", ({ texts, query }) => {
 	}
 	parentPort.postMessage(response);
 });
-`;
+`
 
 export interface Bm25Index {
 	vocabulary: string[]

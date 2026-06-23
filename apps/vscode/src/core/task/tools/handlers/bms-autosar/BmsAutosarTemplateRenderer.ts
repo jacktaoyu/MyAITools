@@ -75,19 +75,19 @@ function findMatchingClose(template: string, startIndex: number, blockType: Bloc
 
 		if (startPos < endPos) {
 			// Found another opening tag of the same type; increase depth.
-			if (startMatch![1] === blockType) {
+			if (startMatch && startMatch[1] === blockType) {
 				depth++
 			}
-			index = startPos + startMatch![0].length
+			index = startPos + (startMatch ? startMatch[0].length : 0)
 		} else {
 			// Found a closing tag.
-			if (endMatch![1] === blockType) {
+			if (endMatch && endMatch[1] === blockType) {
 				depth--
 				if (depth === 0) {
 					return endPos
 				}
 			}
-			index = endPos + endMatch![0].length
+			index = endPos + (endMatch ? endMatch[0].length : 0)
 		}
 	}
 

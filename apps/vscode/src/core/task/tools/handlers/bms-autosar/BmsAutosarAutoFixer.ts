@@ -42,10 +42,9 @@ Fixed source code:`
 }
 
 async function callLlmForFix(api: ApiHandler, prompt: string): Promise<string> {
-	const stream = api.createMessage(
-		"You are an expert embedded AUTOSAR C programmer that produces MISRA-compliant code.",
-		[{ role: "user", content: prompt }],
-	)
+	const stream = api.createMessage("You are an expert embedded AUTOSAR C programmer that produces MISRA-compliant code.", [
+		{ role: "user", content: prompt },
+	])
 
 	let response = ""
 	for await (const chunk of stream) {
@@ -69,11 +68,7 @@ function extractCodeBlock(response: string): string {
  * Attempts to automatically fix quality/MISRA issues in a single BMS AUTOSAR
  * generated file by calling the configured LLM.
  */
-export async function autoFixBmsAutosarFile(
-	api: ApiHandler,
-	workspaceCwd: string,
-	filePath: string,
-): Promise<AutoFixResult> {
+export async function autoFixBmsAutosarFile(api: ApiHandler, workspaceCwd: string, filePath: string): Promise<AutoFixResult> {
 	const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(workspaceCwd, filePath)
 	const originalContent = await fs.readFile(absolutePath, "utf-8")
 
@@ -84,7 +79,13 @@ export async function autoFixBmsAutosarFile(
 	const issues = reportFile?.issues ?? []
 
 	if (issues.length === 0) {
-		return { filePath, fixed: false, originalContent, fixedContent: originalContent, message: "No quality issues recorded for this file." }
+		return {
+			filePath,
+			fixed: false,
+			originalContent,
+			fixedContent: originalContent,
+			message: "No quality issues recorded for this file.",
+		}
 	}
 
 	const prompt = buildFixPrompt(originalContent, issues)
@@ -92,7 +93,13 @@ export async function autoFixBmsAutosarFile(
 	const fixedContent = extractCodeBlock(llmResponse)
 
 	if (!fixedContent || fixedContent === originalContent.trim()) {
-		return { filePath, fixed: false, originalContent, fixedContent: originalContent, message: "LLM did not produce any changes." }
+		return {
+			filePath,
+			fixed: false,
+			originalContent,
+			fixedContent: originalContent,
+			message: "LLM did not produce any changes.",
+		}
 	}
 
 	// Ensure the file ends with a newline.

@@ -1,33 +1,28 @@
+import { type BmsAutosarProgressEvent, GenerateBmsAutosarRequest } from "@shared/proto/cline/bms_autosar"
+import { type BmsAutosarTemplatesList, ListBmsAutosarTemplatesRequest } from "@shared/proto/cline/file"
+import { dump as yamlDump, load as yamlLoad } from "js-yaml"
+import { Loader2 } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { BmsAutosarServiceClient, FileServiceClient } from "@/services/grpc-client"
-import { GenerateBmsAutosarRequest, type BmsAutosarProgressEvent } from "@shared/proto/cline/bms_autosar"
-import { ListBmsAutosarTemplatesRequest, type BmsAutosarTemplatesList } from "@shared/proto/cline/file"
-import { Loader2 } from "lucide-react"
-import { dump as yamlDump, load as yamlLoad } from "js-yaml"
 import ViewHeader from "../common/ViewHeader"
 import BmsAutosarTemplateManager from "./BmsAutosarTemplateManager"
 import { COMPONENT_PRESETS } from "./BmsAutosarWizard.presets"
 import {
+	ASIL_LEVELS,
 	applyPreset,
 	buildPrompt,
 	downloadBlob,
 	exportBatchConfig,
+	getErrorMessage,
 	importBatchConfig,
 	validateForm,
-	ASIL_LEVELS,
 	type WizardFormState,
 } from "./BmsAutosarWizard.utils"
 
@@ -112,7 +107,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 		try {
 			const response = await FileServiceClient.listBmsAutosarTemplates(ListBmsAutosarTemplatesRequest.create({}))
 			setCustomTemplates(response.entries)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to load custom templates:", error)
 		}
 	}, [])
@@ -122,10 +117,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 	}, [loadCustomTemplates])
 
 	const componentTypeOptions = useMemo(
-		() => [
-			...COMPONENT_TYPES,
-			...customTemplates.map((entry) => ({ value: entry.key, label: `${entry.key} (custom)` })),
-		],
+		() => [...COMPONENT_TYPES, ...customTemplates.map((entry) => ({ value: entry.key, label: `${entry.key} (custom)` }))],
 		[customTemplates],
 	)
 
@@ -159,7 +151,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 			{
 				onResponse: (event) => setProgress(event),
 				onError: (err) => {
-					setError(err.message || "Failed to start generation task.")
+					setError(getErrorMessage(err) || "Failed to start generation task.")
 					setIsSubmitting(false)
 				},
 				onComplete: () => {
@@ -227,7 +219,18 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 				} else {
 					config = JSON.parse(content)
 				}
-				const imported = importBatchConfig(config as { components: { component_type?: string; component_name: string; requirements?: string; output_format?: string; ports?: unknown[]; runnables?: unknown[] }[] })
+				const imported = importBatchConfig(
+					config as {
+						components: {
+							component_type?: string
+							component_name: string
+							requirements?: string
+							output_format?: string
+							ports?: unknown[]
+							runnables?: unknown[]
+						}[]
+					},
+				)
 				if ("error" in imported) {
 					setError(imported.error)
 				} else {
@@ -235,8 +238,8 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 					setTouched({})
 					setError(null)
 				}
-			} catch (err: any) {
-				setError(`Failed to import config: ${err.message}`)
+			} catch (err) {
+				setError(`Failed to import config: ${getErrorMessage(err)}`)
 			}
 		}
 		reader.readAsText(file)
@@ -251,9 +254,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 	}
 
 	return (
-		<div
-			className="fixed inset-0 z-50 flex flex-col"
-			style={{ background: "var(--vscode-editor-background)" }}>
+		<div className="fixed inset-0 z-50 flex flex-col" style={{ background: "var(--vscode-editor-background)" }}>
 			<ViewHeader environment={environment} onDone={onDone} title="BMS AUTOSAR Generator" />
 
 			<div className="flex-1 overflow-auto px-6 pb-6">
@@ -274,9 +275,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 									Manage templates
 								</Button>
 							</div>
-							<Select
-								onValueChange={(value) => updateForm("componentType", value)}
-								value={form.componentType}>
+							<Select onValueChange={(value) => updateForm("componentType", value)} value={form.componentType}>
 								<SelectTrigger id="component-type">
 									<SelectValue placeholder="Select a component type" />
 								</SelectTrigger>
@@ -305,10 +304,10 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 								<Label htmlFor="component-name">Component name</Label>
 								<Input
 									id="component-name"
+									onBlur={() => setTouched((prev) => ({ ...prev, componentName: true }))}
+									onChange={(e) => updateForm("componentName", e.target.value)}
 									placeholder="e.g., BmsCscFront"
 									value={form.componentName}
-									onChange={(e) => updateForm("componentName", e.target.value)}
-									onBlur={() => setTouched((prev) => ({ ...prev, componentName: true }))}
 								/>
 								{renderFieldError("componentName")}
 							</div>
@@ -331,7 +330,9 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 							</div>
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="asil-level">ASIL level</Label>
-								<Select onValueChange={(value) => updateForm("asilLevel", value as WizardFormState["asilLevel"])} value={form.asilLevel}>
+								<Select
+									onValueChange={(value) => updateForm("asilLevel", value as WizardFormState["asilLevel"])}
+									value={form.asilLevel}>
 									<SelectTrigger id="asil-level">
 										<SelectValue />
 									</SelectTrigger>
@@ -349,10 +350,10 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 								<Label htmlFor="requirements">Requirements (optional)</Label>
 								<Textarea
 									id="requirements"
+									onChange={(e) => updateForm("requirements", e.target.value)}
 									placeholder="Describe ports, runnables, behavior, timing, and safety requirements..."
 									rows={5}
 									value={form.requirements}
-									onChange={(e) => updateForm("requirements", e.target.value)}
 								/>
 							</div>
 
@@ -360,11 +361,11 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 								<Label htmlFor="ports-json">Ports JSON (optional)</Label>
 								<Textarea
 									id="ports-json"
+									onBlur={() => setTouched((prev) => ({ ...prev, portsJson: true }))}
+									onChange={(e) => updateForm("portsJson", e.target.value)}
 									placeholder='[{"name":"CellVoltage","direction":"provided","interface_type":"S/R","data_type":"Adc_VoltageType"}]'
 									rows={3}
 									value={form.portsJson}
-									onChange={(e) => updateForm("portsJson", e.target.value)}
-									onBlur={() => setTouched((prev) => ({ ...prev, portsJson: true }))}
 								/>
 								{renderFieldError("portsJson")}
 							</div>
@@ -373,27 +374,29 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 								<Label htmlFor="runnables-json">Runnables JSON (optional)</Label>
 								<Textarea
 									id="runnables-json"
+									onBlur={() => setTouched((prev) => ({ ...prev, runnablesJson: true }))}
+									onChange={(e) => updateForm("runnablesJson", e.target.value)}
 									placeholder='[{"name":"Run100ms","event":"TimingEvent","period_ms":100}]'
 									rows={3}
 									value={form.runnablesJson}
-									onChange={(e) => updateForm("runnablesJson", e.target.value)}
-									onBlur={() => setTouched((prev) => ({ ...prev, runnablesJson: true }))}
 								/>
 								{renderFieldError("runnablesJson")}
 							</div>
 
 							<div className="flex flex-col gap-2">
 								<Button
-									variant="outline"
-									size="sm"
 									className="self-start"
-									onClick={() => setShowPreview((prev) => !prev)}>
+									onClick={() => setShowPreview((prev) => !prev)}
+									size="sm"
+									variant="outline">
 									{showPreview ? "Hide live preview" : "Show live preview"}
 								</Button>
 								{showPreview && (
 									<div className="rounded-md border border-panel-border p-4">
 										<h4 className="mb-2 text-xs font-medium text-description">Live prompt preview</h4>
-										<pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{buildPrompt(form)}</pre>
+										<pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">
+											{buildPrompt(form)}
+										</pre>
 									</div>
 								)}
 							</div>
@@ -418,12 +421,12 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 							</div>
 							<Progress value={progress.percentComplete} />
 							<Button
-								size="sm"
-								variant="secondary"
 								onClick={() => {
 									cancelFn?.()
 									setIsSubmitting(false)
-								}}>
+								}}
+								size="sm"
+								variant="secondary">
 								Cancel
 							</Button>
 						</div>
@@ -491,6 +494,5 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 		</div>
 	)
 }
-
 
 export default BmsAutosarWizard

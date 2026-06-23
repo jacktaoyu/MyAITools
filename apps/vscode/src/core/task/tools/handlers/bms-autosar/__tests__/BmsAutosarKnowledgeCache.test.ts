@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { describe, it, beforeEach, afterEach } from "mocha"
+import { afterEach, beforeEach, describe, it } from "mocha"
 import {
 	findAndLoadTemplatesCached,
 	invalidateBmsAutosarKnowledgeCache,

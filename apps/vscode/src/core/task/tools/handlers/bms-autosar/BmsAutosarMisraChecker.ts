@@ -1,5 +1,5 @@
 import path from "node:path"
-import { isHighAsil, type AsilLevel } from "./BmsAutosarAsil"
+import { type AsilLevel, isHighAsil } from "./BmsAutosarAsil"
 
 export interface MisraRule {
 	id: string
@@ -43,18 +43,64 @@ export interface MisraCheckOptions {
 const MISRA_RULES: Record<string, MisraRule> = {
 	"R5.1": { id: "R5.1", category: "required", description: "External identifiers shall be distinct." },
 	"R7.1": { id: "R7.1", category: "required", description: "Octal constants shall not be used." },
-	"R8.4": { id: "R8.4", category: "required", description: "A compatible declaration shall be visible for objects and functions with external linkage." },
-	"R8.9": { id: "R8.9", category: "advisory", description: "An object should be defined at block scope if its identifier only appears in one function." },
-	"R9.1": { id: "R9.1", category: "mandatory", description: "The value of an object with automatic storage shall not be read before it has been set." },
-	"R11.3": { id: "R11.3", category: "required", description: "A cast shall not be performed between a pointer to object type and a pointer to a different object type." },
-	"R14.4": { id: "R14.4", category: "required", description: "The controlling expression of an if or iteration statement shall have essentially Boolean type." },
-	"R15.5": { id: "R15.5", category: "advisory", description: "A function should have a single point of exit at the end of the function.", appliesTo: "all" },
-	"R17.7": { id: "R17.7", category: "required", description: "The value returned by a function having non-void return type shall be used." },
-	"R21.3": { id: "R21.3", category: "required", description: "The memory allocation and deallocation functions of <stdlib.h> shall not be used." },
+	"R8.4": {
+		id: "R8.4",
+		category: "required",
+		description: "A compatible declaration shall be visible for objects and functions with external linkage.",
+	},
+	"R8.9": {
+		id: "R8.9",
+		category: "advisory",
+		description: "An object should be defined at block scope if its identifier only appears in one function.",
+	},
+	"R9.1": {
+		id: "R9.1",
+		category: "mandatory",
+		description: "The value of an object with automatic storage shall not be read before it has been set.",
+	},
+	"R11.3": {
+		id: "R11.3",
+		category: "required",
+		description: "A cast shall not be performed between a pointer to object type and a pointer to a different object type.",
+	},
+	"R14.4": {
+		id: "R14.4",
+		category: "required",
+		description: "The controlling expression of an if or iteration statement shall have essentially Boolean type.",
+	},
+	"R15.5": {
+		id: "R15.5",
+		category: "advisory",
+		description: "A function should have a single point of exit at the end of the function.",
+		appliesTo: "all",
+	},
+	"R17.7": {
+		id: "R17.7",
+		category: "required",
+		description: "The value returned by a function having non-void return type shall be used.",
+	},
+	"R21.3": {
+		id: "R21.3",
+		category: "required",
+		description: "The memory allocation and deallocation functions of <stdlib.h> shall not be used.",
+	},
 	"R21.6": { id: "R21.6", category: "required", description: "The Standard Library input/output functions shall not be used." },
-	"R21.8": { id: "R21.8", category: "required", description: "The library functions abort, exit, getenv and system of <stdlib.h> shall not be used." },
-	"R21.9": { id: "R21.9", category: "required", description: "The library functions bsearch and qsort of <stdlib.h> shall not be used." },
-	"SAFETY-EXIT": { id: "SAFETY-EXIT", category: "mandatory", description: "A safety-relevant function shall have a single point of exit.", appliesTo: ["ASIL_C", "ASIL_D"] },
+	"R21.8": {
+		id: "R21.8",
+		category: "required",
+		description: "The library functions abort, exit, getenv and system of <stdlib.h> shall not be used.",
+	},
+	"R21.9": {
+		id: "R21.9",
+		category: "required",
+		description: "The library functions bsearch and qsort of <stdlib.h> shall not be used.",
+	},
+	"SAFETY-EXIT": {
+		id: "SAFETY-EXIT",
+		category: "mandatory",
+		description: "A safety-relevant function shall have a single point of exit.",
+		appliesTo: ["ASIL_C", "ASIL_D"],
+	},
 }
 
 function stripCComments(content: string): string {
@@ -104,7 +150,7 @@ function ruleSeverity(category: MisraRule["category"]): "error" | "warning" | "i
  */
 export function runMisraChecks(filePath: string, content: string, options: MisraCheckOptions = {}): MisraCheckResult {
 	const stripped = stripCComments(content)
-	const lines = content.split("\n")
+	const _lines = content.split("\n")
 	const issues: MisraIssue[] = []
 	const ext = path.extname(filePath).toLowerCase()
 	const isHeader = ext === ".h"
@@ -126,10 +172,12 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 		["qsort", "R21.9"],
 	])
 	const stdlibCallRegex = new RegExp(`\\b(${Array.from(forbiddenStdlib.keys()).join("|")})\\s*\\(`, "g")
-	let match: RegExpExecArray | null
-	while ((match = stdlibCallRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(stdlibCallRegex)) {
 		const func = match[1]
-		const rule = forbiddenStdlib.get(func)!
+		const rule = forbiddenStdlib.get(func)
+		if (!rule) {
+			continue
+		}
 		issues.push({
 			rule,
 			category: MISRA_RULES[rule].category,
@@ -140,8 +188,9 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 	}
 
 	// R21.6: stdio functions.
-	const stdioRegex = /\b(printf|fprintf|sprintf|snprintf|scanf|fscanf|sscanf|fopen|fclose|fread|fwrite|fgets|fputs|puts|gets|putchar|getchar)\s*\(/g
-	while ((match = stdioRegex.exec(stripped)) !== null) {
+	const stdioRegex =
+		/\b(printf|fprintf|sprintf|snprintf|scanf|fscanf|sscanf|fopen|fclose|fread|fwrite|fgets|fputs|puts|gets|putchar|getchar)\s*\(/g
+	for (const match of stripped.matchAll(stdioRegex)) {
 		const func = match[1]
 		issues.push({
 			rule: "R21.6",
@@ -154,7 +203,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 
 	// R7.1: no octal constants (0-prefixed numbers that are not 0x hex).
 	const octalRegex = /(?<![\w.])0([0-7]+)(?![\w.xX])/g
-	while ((match = octalRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(octalRegex)) {
 		issues.push({
 			rule: "R7.1",
 			category: MISRA_RULES["R7.1"].category,
@@ -166,7 +215,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 
 	// R11.3: suspicious pointer casts (heuristic).
 	const castRegex = /\(\s*(uint8|uint16|uint32|sint8|sint16|sint32|float32|boolean|void)\s*\*\s*\)/g
-	while ((match = castRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(castRegex)) {
 		issues.push({
 			rule: "R11.3",
 			category: MISRA_RULES["R11.3"].category,
@@ -179,7 +228,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 	// R14.4: controlling expressions should be Boolean.
 	// Heuristic: assignments inside if/while/for conditions.
 	const controlAssignRegex = /\b(if|while|for)\s*\([^)]*=[^=][^)]*\)/g
-	while ((match = controlAssignRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(controlAssignRegex)) {
 		issues.push({
 			rule: "R14.4",
 			category: MISRA_RULES["R14.4"].category,
@@ -217,7 +266,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 
 	// R17.7: unused non-void return values.
 	const ignoredReturnRegex = /(?:^|;|\{)\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^;)]*\)\s*;/gm
-	while ((match = ignoredReturnRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(ignoredReturnRegex)) {
 		const func = match[1]
 		// Skip known void-like or standard functions.
 		if (func.startsWith("Rte_") || func.startsWith("Det_") || func.startsWith("SchM_")) {
@@ -238,7 +287,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 	// R5.1: external identifier length.
 	const externalIds = new Set<string>()
 	const globalRegex = /(?:^|\n)\s*(?:extern\s+)?[A-Za-z_][A-Za-z0-9_]*\s+\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*[;{]/gm
-	while ((match = globalRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(globalRegex)) {
 		externalIds.add(match[1])
 	}
 	for (const id of externalIds) {
@@ -253,14 +302,15 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 	}
 
 	// R8.4: definition without prior declaration for non-static functions.
-	const definitionRegex = /(?:^|\n)\s*(?!\s*static\b)(?:extern\s+)?[A-Za-z_][A-Za-z0-9_]*\s+\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*\{/g
+	const definitionRegex =
+		/(?:^|\n)\s*(?!\s*static\b)(?:extern\s+)?[A-Za-z_][A-Za-z0-9_]*\s+\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*\{/g
 	const declared = new Set<string>()
 	const defined = new Set<string>()
 	const declRegex = /(?:^|\n)\s*(?:extern\s+)?[A-Za-z_][A-Za-z0-9_]*\s+\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*;/g
-	while ((match = declRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(declRegex)) {
 		declared.add(match[1])
 	}
-	while ((match = definitionRegex.exec(stripped)) !== null) {
+	for (const match of stripped.matchAll(definitionRegex)) {
 		defined.add(match[1])
 	}
 	for (const fn of defined) {
@@ -275,8 +325,9 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 	}
 
 	// R8.9: file-scope objects that could be moved to block scope (heuristic).
-	const fileScopeVarRegex = /(?:^|\n)\s*(?!static\b|extern\b|const\b|typedef\b)(?:[A-Za-z_][A-Za-z0-9_]*\s+)+?\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^;]*)?;/g
-	while ((match = fileScopeVarRegex.exec(stripped)) !== null) {
+	const fileScopeVarRegex =
+		/(?:^|\n)\s*(?!static\b|extern\b|const\b|typedef\b)(?:[A-Za-z_][A-Za-z0-9_]*\s+)+?\*?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^;]*)?;/g
+	for (const match of stripped.matchAll(fileScopeVarRegex)) {
 		const id = match[match.length - 1]
 		issues.push({
 			rule: "R8.9",
@@ -311,8 +362,7 @@ export function runMisraChecks(filePath: string, content: string, options: Misra
 function findFunctionBodies(content: string): Array<{ name: string; body: string; startOffset: number }> {
 	const bodies: Array<{ name: string; body: string; startOffset: number }> = []
 	const regex = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*\{/g
-	let match: RegExpExecArray | null
-	while ((match = regex.exec(content)) !== null) {
+	for (const match of content.matchAll(regex)) {
 		const start = match.index + match[0].length
 		const name = match[1]
 		let depth = 1
@@ -329,9 +379,9 @@ function findFunctionBodies(content: string): Array<{ name: string; body: string
 
 function findUninitializedVariables(content: string): string[] {
 	const uninitialized: string[] = []
-	const regex = /\b(?:uint8|uint16|uint32|uint64|sint8|sint16|sint32|sint64|float32|float64|boolean|int|char|unsigned|signed)\b\s+\*?\s*([A-Za-z_][\w,\s]*)(?!\s*=)/g
-	let match: RegExpExecArray | null
-	while ((match = regex.exec(content)) !== null) {
+	const regex =
+		/\b(?:uint8|uint16|uint32|uint64|sint8|sint16|sint32|sint64|float32|float64|boolean|int|char|unsigned|signed)\b\s+\*?\s*([A-Za-z_][\w,\s]*)(?!\s*=)/g
+	for (const match of content.matchAll(regex)) {
 		const decl = match[1]
 		const vars = decl
 			.split(",")

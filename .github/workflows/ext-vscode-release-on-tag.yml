@@ -1,0 +1,87 @@
+name: ext-vscode-release-on-tag
+
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Tag to release (must already exist, e.g. v0.1.0-bms-autosar)"
+                required: true
+                type: string
+
+permissions:
+    contents: write
+
+jobs:
+    test:
+        uses: ./.github/workflows/ext-vscode-test.yml
+
+    release:
+        needs: test
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: apps/vscode
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  fetch-tags: true
+
+            - name: Resolve tag
+              id: resolve_tag
+              working-directory: ${{ github.workspace }}
+              env:
+                  INPUT_TAG: ${{ github.event.inputs.tag }}
+                  PUSHED_TAG: ${{ github.ref_name }}
+              run: |
+                  TAG="${INPUT_TAG:-$PUSHED_TAG}"
+                  if [[ -z "$TAG" ]]; then
+                    echo "Error: no tag provided"
+                    exit 1
+                  fi
+                  if [[ ! "$TAG" =~ ^v ]]; then
+                    echo "Error: tag must start with 'v'"
+                    exit 1
+                  fi
+                  git checkout "refs/tags/$TAG"
+                  echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+            - name: Setup Node.js environment
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: "npm"
+                  cache-dependency-path: |
+                      apps/vscode/package-lock.json
+                      apps/vscode/webview-ui/package-lock.json
+
+            - name: Install extension dependencies
+              working-directory: ${{ github.workspace }}
+              run: npm --prefix apps/vscode ci
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install webview-ui dependencies
+              working-directory: ${{ github.workspace }}
+              run: npm --prefix apps/vscode/webview-ui ci
+
+            - name: Package VSIX
+              id: package
+              run: |
+                  npm run package:vsix
+                  VERSION=$(node -p "require('./package.json').version")
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+            - name: Create or update GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.resolve_tag.outputs.tag }}
+                  name: "BMS AUTOSAR ${{ steps.resolve_tag.outputs.tag }}"
+                  files: apps/vscode/dist/claude-dev-${{ steps.package.outputs.version }}-bms-autosar.vsix
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

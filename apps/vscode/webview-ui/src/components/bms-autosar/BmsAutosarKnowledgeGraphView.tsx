@@ -1,10 +1,7 @@
+import { BooleanRequest } from "@shared/proto/cline/common"
+import { BmsAutosarKnowledgeGraph, BmsAutosarKnowledgeGraphRequest } from "@shared/proto/cline/file"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useCallback, useEffect, useState } from "react"
-import {
-	BmsAutosarKnowledgeGraph,
-	BmsAutosarKnowledgeGraphRequest,
-} from "@shared/proto/cline/file"
-import { BooleanRequest } from "@shared/proto/cline/common"
 import ViewHeader from "@/components/common/ViewHeader"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient } from "@/services/grpc-client"
@@ -25,7 +22,7 @@ export const BmsAutosarKnowledgeGraphView: React.FC<{ onDone: () => void }> = ({
 				BmsAutosarKnowledgeGraphRequest.create({ scope, filePaths: arxmlFiles }),
 			)
 			setGraph(response)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to load ARXML knowledge graph:", error)
 		} finally {
 			setLoading(false)
@@ -56,27 +53,27 @@ export const BmsAutosarKnowledgeGraphView: React.FC<{ onDone: () => void }> = ({
 			if (picked.length > 0) {
 				setArxmlFiles(picked)
 			}
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to select ARXML files:", error)
 		}
 	}
 
 	return (
 		<div className="fixed inset-0 flex flex-col bg-[var(--vscode-editor-background)]">
-			<ViewHeader title="ARXML Knowledge Graph" onDone={onDone} environment={environment} />
+			<ViewHeader environment={environment} onDone={onDone} title="ARXML Knowledge Graph" />
 
-			<div id="arxml-graph-container" className="flex-1 overflow-hidden flex flex-col px-5 pb-5">
+			<div className="flex-1 overflow-hidden flex flex-col px-5 pb-5" id="arxml-graph-container">
 				<BmsAutosarKnowledgeGraphRenderer
-					nodes={graph?.nodes ?? []}
 					edges={graph?.edges ?? []}
-					width={dimensions.width}
+					emptyMessage="No ARXML graph data available. Import ARXML files into the BMS knowledge base or select them above."
 					height={dimensions.height}
 					loading={loading}
-					emptyMessage="No ARXML graph data available. Import ARXML files into the BMS knowledge base or select them above.">
+					nodes={graph?.nodes ?? []}
+					width={dimensions.width}>
 					<select
-						value={scope}
+						className="text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
 						onChange={(e) => setScope(e.target.value as "workspace" | "global")}
-						className="text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
+						value={scope}>
 						<option value="workspace">Workspace</option>
 						<option value="global">Global</option>
 					</select>
@@ -93,8 +90,11 @@ export const BmsAutosarKnowledgeGraphView: React.FC<{ onDone: () => void }> = ({
 							</VSCodeButton>
 						</>
 					)}
-					<VSCodeButton appearance="icon" aria-label="Refresh" onClick={fetchGraph} disabled={loading}>
-						<i className={`codicon codicon-refresh ${loading ? "animate-spin" : ""}`} style={{ fontSize: "12.5px" }} />
+					<VSCodeButton appearance="icon" aria-label="Refresh" disabled={loading} onClick={fetchGraph}>
+						<i
+							className={`codicon codicon-refresh ${loading ? "animate-spin" : ""}`}
+							style={{ fontSize: "12.5px" }}
+						/>
 					</VSCodeButton>
 					{arxmlFiles.length > 0 && (
 						<div className="text-xs text-[var(--vscode-descriptionForeground)]">

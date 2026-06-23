@@ -4,6 +4,56 @@
 
 ---
 
+## 2026-06-22（第三十一次迭代 / RAG 增强、工程债务清理、Webview 体验与发布自动化）
+
+### 新增功能
+
+- **RAG 知识库增量更新与源文件元数据**
+  - `proto/cline/file.proto`：新增 `BmsKnowledgeLocation`、知识条目的 `source_path` / `source_hash` / `source_mtime_ms` / `source_size` / `content_hash` / `embedding_model` / `locations` 等字段，并重新生成 gRPC 桩代码。
+  - `BmsAutosarKnowledgeTypes.ts`：扩展 `BmsAutosarKnowledgeEntry`，新增 source 元数据与 location 类型；ARXML chunk 优先按 `AR-PACKAGE` / `SW-COMPONENT-TYPE` 等结构标签拆分，保留 `SHORT-NAME` / `UUID`。
+  - `bmsKnowledgeStorage.ts`：新增 `saveBmsKnowledgeEntries`，按 topic / sourceHash 合并，保留未变更条目，删除已移除源文件对应条目，返回新增/更新/移除/未变统计。
+  - `addBmsKnowledge.ts` / `addBmsKnowledgeFolder.ts`：改为按文件生成 entry，记录 `mtimeMs` / `size` / `sha256` / 相对路径 / `locations`，支持增量更新与未变更文件复用。
+  - `searchBmsKnowledge.ts`：检索结果透传 `locations`。
+
+- **本地向量缓存**
+  - `BmsAutosarKnowledgeCache.ts`：新增 `loadVectorCached` / `saveVectorCached`，向量磁盘缓存目录 `~/.cline/bms-autosar/cache/vectors/<contentHash>.<model>.json`。
+  - `BmsAutosarSemanticRetrieval.ts`：embedding 改为走向量缓存，缺失时批量 embedding 并写入缓存，不再把向量写回 `knowledge.json`；保留旧 `knowledge.json` 内嵌 embedding 迁移逻辑。
+  - `listBmsKnowledge.ts`：`hasEmbedding` / `embeddingStale` 改为查询向量缓存判断。
+
+- **知识库格式扩展**
+  - 新增 `BmsAutosarDbcParser.ts`：轻量正则解析 DBC 的 `BO_` / `SG_` / `BA_` / `VAL_`，每个 message 生成一个 entry，解析失败时回退纯文本。
+  - `extract-text.ts`：新增 `extractTextFromFileWithLocations`，PDF 支持按页、DOCX 支持按章节返回 `locations`；`KNOWLEDGE_IMPORT_EXTENSIONS` 新增 `.dbc`。
+
+- **工程债务清理**
+  - BMS 目录 `biome check` 零诊断：`apps/vscode/src/core/task/tools/handlers/bms-autosar` 与 `apps/vscode/webview-ui/src/components/bms-autosar` 在 `biome check` 下无 error / warning / info。
+  - 手工清理典型 lint 问题：所有 `while ((match = regex.exec(...)) !== null)` 改为 `for...of content.matchAll(regex)`；多处 `catch (error: any)` 改为 `catch (error: unknown)` 配合 narrow；数组 index key 改为稳定 key；原生 `<button>` 添加 `type="button"`；SVG 交互元素补充 `role` / `tabIndex` / `title` / `aria-label`。
+  - root `package.json`：修复 `scripts` 中缺失逗号导致 `vite` 构建失败的语法错误。
+
+- **Webview 体验与命令快捷键**
+  - `apps/vscode/package.json`：`activationEvents` 新增 BMS 命令；`contributes.commands` 新增 `cline.bmsAutosar.openCompile` / `cline.bmsAutosar.openGenerator`；`contributes.keybindings` 绑定 `ctrl+shift+b` / `cmd+shift+b` 打开编译管理器，`ctrl+shift+g` / `cmd+shift+g` 打开生成器向导。
+  - `src/registry.ts` / `src/extension.ts`：注册新的命令常量与 handler。
+  - `proto/cline/ui.proto`：新增 `subscribeToBmsAutosarCompile` / `subscribeToBmsAutosarGenerator` 流式事件，并重新生成 gRPC 桩代码。
+  - 新增 controller `subscribeToBmsAutosarCompile.ts` / `subscribeToBmsAutosarGenerator.ts`。
+  - `ExtensionStateContext.tsx` / `ChatTextArea.tsx`：订阅事件并打开编译管理器对话框或生成器向导视图。
+
+- **发布自动化**
+  - 新增 `.github/workflows/ext-vscode-release-on-tag.yml`：由 `v*` tag push 触发，复用 `ext-vscode-test.yml`，打包 `package:vsix`，并通过 `softprops/action-gh-release@v2` 上传 VSIX 到 GitHub Release。
+
+### 单元测试
+
+- 新增 `BmsAutosarDbcParser.test.ts`。
+- 新增 `BmsAutosarVectorCache.test.ts`。
+- 新增 `addBmsKnowledgeFolder.incremental.test.ts`。
+- 新增/更新 Webview 组件测试。
+- 全量单元测试通过：`npm run test:unit` 共 **1685** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`。
+
+---
+
 ## 2026-06-23（第三十次迭代 / ASIL 等级支持深化与 ARXML 知识图谱优化）
 
 ### 新增功能

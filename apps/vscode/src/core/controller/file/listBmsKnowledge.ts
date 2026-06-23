@@ -9,7 +9,15 @@ import {
 import { fileExistsAtPath } from "@utils/fs";
 import { getCwd, getDesktopDir } from "@utils/path";
 import { hashContent } from "@core/task/tools/handlers/bms-autosar/BmsAutosarEmbeddingService";
+import { loadVectorCached } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache";
+import { DEFAULT_EMBEDDING_MODEL } from "@core/task/tools/handlers/bms-autosar/BmsAutosarEmbeddingService";
 import type { Controller } from "..";
+
+interface RawKnowledgeLocation {
+	path?: string;
+	page?: number;
+	chapter?: string;
+}
 
 interface RawKnowledgeEntry {
 	topic?: string;
@@ -17,10 +25,17 @@ interface RawKnowledgeEntry {
 	updatedAt?: string;
 	tags?: string[];
 	sourceFiles?: string[];
+	sourcePath?: string;
+	sourceHash?: string;
+	sourceMtimeMs?: number;
+	sourceSize?: number;
+	locations?: RawKnowledgeLocation[];
 	embedding?: {
 		model?: string;
 		contentHash?: string;
 	};
+	contentHash?: string;
+	embeddingModel?: string;
 }
 
 interface RawKnowledgeFile {
@@ -52,9 +67,18 @@ export async function listBmsKnowledge(
 				if (Array.isArray(parsed.entries)) {
 					for (const entry of parsed.entries) {
 						if (entry.topic) {
-							const hasEmbedding = !!entry.embedding?.model;
+							const contentHash =
+								entry.contentHash || hashContent(entry.content || "");
+							const embeddingModel =
+								entry.embeddingModel || DEFAULT_EMBEDDING_MODEL;
+							const cachedVector = await loadVectorCached(
+								contentHash,
+								embeddingModel,
+							);
+							// Backwards compatibility: also consider legacy in-entry embeddings.
+							const hasEmbedding = !!cachedVector || !!entry.embedding?.model;
 							const embeddingStale = hasEmbedding
-								? (entry.embedding?.contentHash ?? "") !==
+								? (entry.embedding?.contentHash ?? contentHash) !==
 									hashContent(entry.content || "")
 								: false;
 							entries.push(
@@ -66,6 +90,15 @@ export async function listBmsKnowledge(
 									embeddingStale,
 									content: entry.content || "",
 									sourceFiles: entry.sourceFiles || [],
+									sourcePath: entry.sourcePath || "",
+									sourceHash: entry.sourceHash || "",
+									sourceMtimeMs: entry.sourceMtimeMs ?? 0,
+									sourceSize: entry.sourceSize ?? 0,
+									locations: (entry.locations || []).map((loc) => ({
+										path: loc.path || "",
+										page: loc.page ?? 0,
+										chapter: loc.chapter || "",
+									})),
 								}),
 							);
 						}

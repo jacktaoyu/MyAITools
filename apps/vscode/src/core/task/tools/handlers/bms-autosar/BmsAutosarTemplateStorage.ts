@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { fileExistsAtPath } from "@utils/fs"
 import { getClineHomePath } from "@core/storage/disk"
+import { fileExistsAtPath } from "@utils/fs"
 import type { BmsAutosarTemplate, BmsAutosarTemplates } from "./BmsAutosarTemplateRenderer"
 
 export type BmsAutosarTemplateScope = "workspace" | "global"
@@ -32,10 +32,7 @@ function createEmptyTemplates(): BmsAutosarTemplates {
  * Merge built-in templates with user-defined global and workspace templates.
  * Workspace templates take highest precedence, then global, then built-in.
  */
-export async function loadMergedTemplates(
-	cwd: string,
-	builtInTemplates: BmsAutosarTemplates,
-): Promise<BmsAutosarTemplates> {
+export async function loadMergedTemplates(cwd: string, builtInTemplates: BmsAutosarTemplates): Promise<BmsAutosarTemplates> {
 	const globalTemplates = await loadBmsTemplates(cwd, "global")
 	const workspaceTemplates = await loadBmsTemplates(cwd, "workspace")
 	return {
@@ -51,10 +48,7 @@ export async function loadMergedTemplates(
 /**
  * Load user-defined BMS AUTOSAR templates for a specific scope.
  */
-export async function loadBmsTemplates(
-	cwd: string,
-	scope: BmsAutosarTemplateScope = "workspace",
-): Promise<BmsAutosarTemplates> {
+export async function loadBmsTemplates(cwd: string, scope: BmsAutosarTemplateScope = "workspace"): Promise<BmsAutosarTemplates> {
 	const templatesPath = getTemplatesPath(cwd, scope)
 	if (!(await fileExistsAtPath(templatesPath))) {
 		return createEmptyTemplates()
@@ -94,13 +88,9 @@ export async function saveBmsTemplate(
 /**
  * Delete a user-defined template from the templates file for the given scope.
  */
-export async function deleteBmsTemplate(
-	cwd: string,
-	scope: BmsAutosarTemplateScope,
-	templateKey: string,
-): Promise<boolean> {
+export async function deleteBmsTemplate(cwd: string, scope: BmsAutosarTemplateScope, templateKey: string): Promise<boolean> {
 	const data = await loadBmsTemplates(cwd, scope)
-	if (!Object.prototype.hasOwnProperty.call(data.templates, templateKey)) {
+	if (!Object.hasOwn(data.templates, templateKey)) {
 		return false
 	}
 	delete data.templates[templateKey]
@@ -108,11 +98,7 @@ export async function deleteBmsTemplate(
 	return true
 }
 
-async function writeBmsTemplates(
-	cwd: string,
-	scope: BmsAutosarTemplateScope,
-	data: BmsAutosarTemplates,
-): Promise<string> {
+async function writeBmsTemplates(cwd: string, scope: BmsAutosarTemplateScope, data: BmsAutosarTemplates): Promise<string> {
 	const templatesDir = getBmsTemplatesDir(cwd, scope)
 	const templatesPath = path.join(templatesDir, TEMPLATES_FILE_NAME)
 	await fs.mkdir(templatesDir, { recursive: true })

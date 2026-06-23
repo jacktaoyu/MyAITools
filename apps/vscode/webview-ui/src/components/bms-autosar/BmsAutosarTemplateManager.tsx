@@ -1,15 +1,16 @@
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import React, { useCallback, useEffect, useState } from "react"
 import {
 	BmsAutosarTemplateEntry,
 	DeleteBmsAutosarTemplateRequest,
 	ListBmsAutosarTemplatesRequest,
 	SaveBmsAutosarTemplateRequest,
 } from "@shared/proto/cline/file"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import React, { useCallback, useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { FileServiceClient } from "@/services/grpc-client"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { FileServiceClient } from "@/services/grpc-client"
+import { getErrorMessage } from "./BmsAutosarWizard.utils"
 
 const BUILTIN_COMPONENT_TYPES = [
 	"swc",
@@ -44,9 +45,9 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 		try {
 			const response = await FileServiceClient.listBmsAutosarTemplates(ListBmsAutosarTemplatesRequest.create({}))
 			setTemplates(response.entries)
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to load templates:", error)
-			setMessage(`Failed to load templates: ${error?.message || error}`)
+			setMessage(`Failed to load templates: ${getErrorMessage(error)}`)
 		} finally {
 			setLoading(false)
 		}
@@ -65,9 +66,9 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 			)
 			setMessage(response.value)
 			await loadTemplates()
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to delete template:", error)
-			setMessage(`Failed to delete template: ${error?.message || error}`)
+			setMessage(`Failed to delete template: ${getErrorMessage(error)}`)
 		}
 	}
 
@@ -91,21 +92,21 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 			setMessage(response.value)
 			setNewKey("")
 			await loadTemplates()
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Failed to save template:", error)
-			setMessage(`Failed to save template: ${error?.message || error}`)
+			setMessage(`Failed to save template: ${getErrorMessage(error)}`)
 		}
 	}
 
 	return (
-		<Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+		<Dialog onOpenChange={(open) => !open && onClose()} open={isOpen}>
 			<DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
 				<DialogHeader>
 					<DialogTitle>Manage BMS AUTOSAR Templates</DialogTitle>
 					<DialogDescription>
 						User-defined templates are stored in <code>.cline/bms-autosar/templates.json</code> (workspace) or{" "}
-						<code>~/.cline/bms-autosar/templates.json</code> (global). They override built-in templates with the
-						same key.
+						<code>~/.cline/bms-autosar/templates.json</code> (global). They override built-in templates with the same
+						key.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -117,7 +118,7 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 					) : (
 						<ul className="divide-y divide-[var(--vscode-panel-border)] border border-[var(--vscode-panel-border)] rounded">
 							{templates.map((template) => (
-								<li key={template.key} className="py-2 px-3 flex items-center justify-between gap-2">
+								<li className="py-2 px-3 flex items-center justify-between gap-2" key={template.key}>
 									<div className="text-xs">
 										<div className="font-medium">{template.key}</div>
 										<div className="text-[var(--vscode-descriptionForeground)]">
@@ -142,18 +143,18 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 						<div className="flex-1 flex flex-col gap-1">
 							<Label className="text-xs">Key</Label>
 							<Input
-								value={newKey}
+								className="text-xs"
 								onChange={(e) => setNewKey(e.target.value)}
 								placeholder="e.g., my_custom_swc"
-								className="text-xs"
+								value={newKey}
 							/>
 						</div>
 						<div className="flex-1 flex flex-col gap-1">
 							<Label className="text-xs">Base type</Label>
 							<select
-								value={newComponentType}
+								className="text-xs px-2 py-1.5 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
 								onChange={(e) => setNewComponentType(e.target.value)}
-								className="text-xs px-2 py-1.5 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
+								value={newComponentType}>
 								{BUILTIN_COMPONENT_TYPES.map((type) => (
 									<option key={type} value={type}>
 										{type}
@@ -164,9 +165,9 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 						<div className="flex-1 flex flex-col gap-1">
 							<Label className="text-xs">Scope</Label>
 							<select
-								value={newScope}
+								className="text-xs px-2 py-1.5 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
 								onChange={(e) => setNewScope(e.target.value as "workspace" | "global")}
-								className="text-xs px-2 py-1.5 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
+								value={newScope}>
 								<option value="workspace">Workspace</option>
 								<option value="global">Global</option>
 							</select>
@@ -177,9 +178,7 @@ export const BmsAutosarTemplateManager: React.FC<BmsAutosarTemplateManagerProps>
 					</div>
 				</div>
 
-				{message && (
-					<div className="mt-3 text-xs text-[var(--vscode-descriptionForeground)]">{message}</div>
-				)}
+				{message && <div className="mt-3 text-xs text-[var(--vscode-descriptionForeground)]">{message}</div>}
 			</DialogContent>
 		</Dialog>
 	)

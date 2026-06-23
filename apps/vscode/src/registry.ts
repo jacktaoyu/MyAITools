@@ -27,6 +27,8 @@ const ClineCommands = {
 	AbortCommit: prefix + ".abortGitCommitMessage",
 	ReconstructTaskHistory: prefix + ".reconstructTaskHistory",
 	BmsAutosarGenerate: prefix + ".bmsAutosarGenerate",
+	BmsAutosarOpenGenerator: prefix + ".bmsAutosar.openGenerator",
+	BmsAutosarOpenCompile: prefix + ".bmsAutosar.openCompile",
 	BmsAutosarQualityReport: prefix + ".bmsAutosarQualityReport",
 	BmsAutosarKnowledgeGraph: prefix + ".bmsAutosarKnowledgeGraph",
 	// Jupyter Notebook commands

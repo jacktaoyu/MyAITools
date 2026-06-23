@@ -55,9 +55,12 @@ export function validateJsonArray(value: string): { valid: boolean; error?: stri
 		}
 		return { valid: true }
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err)
-		return { valid: false, error: `Invalid JSON: ${message}` }
+		return { valid: false, error: `Invalid JSON: ${getErrorMessage(err)}` }
 	}
+}
+
+export function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error)
 }
 
 export function validateForm(state: WizardFormState): { valid: boolean; errors: Partial<Record<keyof WizardFormState, string>> } {

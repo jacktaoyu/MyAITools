@@ -1,11 +1,6 @@
 import { strict as assert } from "node:assert"
 import { describe, it } from "mocha"
-import {
-	buildArxmlKnowledgeGraph,
-	getRelatedNodes,
-	rankByGraphProximity,
-	searchGraphNodes,
-} from "../BmsAutosarKnowledgeGraph"
+import { buildArxmlKnowledgeGraph, getRelatedNodes, rankByGraphProximity, searchGraphNodes } from "../BmsAutosarKnowledgeGraph"
 
 const SAMPLE_ARXML = `<?xml version="1.0" encoding="UTF-8"?>
 <AUTOSAR xmlns="http://autosar.org/schema/r4.0">
@@ -67,7 +62,7 @@ describe("BmsAutosarKnowledgeGraph", () => {
 		const port = Array.from(graph.nodes.values()).find((n) => n.name === "VoltageOut")
 		assert.ok(component)
 		assert.ok(port)
-		assert.ok(graph.edges.some((e) => e.source === component!.id && e.target === port!.id && e.relation === "contains"))
+		assert.ok(graph.edges.some((e) => e.source === component?.id && e.target === port?.id && e.relation === "contains"))
 	})
 
 	it("creates reference edges from port to interface", () => {
@@ -76,7 +71,7 @@ describe("BmsAutosarKnowledgeGraph", () => {
 		const iface = Array.from(graph.nodes.values()).find((n) => n.name === "BmsVoltageInterface")
 		assert.ok(port)
 		assert.ok(iface)
-		assert.ok(graph.edges.some((e) => e.source === port!.id && e.target === iface!.id && e.relation === "provides"))
+		assert.ok(graph.edges.some((e) => e.source === port?.id && e.target === iface?.id && e.relation === "provides"))
 	})
 
 	it("searches nodes by name", () => {
@@ -89,9 +84,9 @@ describe("BmsAutosarKnowledgeGraph", () => {
 		const graph = buildArxmlKnowledgeGraph(SAMPLE_ARXML)
 		const component = Array.from(graph.nodes.values()).find((n) => n.name === "BmsCellMonitor")
 		assert.ok(component)
-		const related = getRelatedNodes(graph, component!.id, 2)
+		const related = getRelatedNodes(graph, component?.id, 2)
 		assert.ok(related.size > 1)
-		assert.ok(related.has(component!.id))
+		assert.ok(related.has(component?.id))
 	})
 
 	it("ranks entries by graph proximity", () => {

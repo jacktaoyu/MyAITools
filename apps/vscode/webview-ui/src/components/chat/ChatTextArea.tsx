@@ -230,6 +230,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			navigateToBmsAutosarWizard,
 			navigateToBmsAutosarQualityReport,
 			navigateToBmsAutosarKnowledgeGraph,
+			showBmsAutosarCompileManager,
+			setShowBmsAutosarCompileManager,
 		} = useExtensionState()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
@@ -263,6 +265,15 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const dimensionErrorTimerRef = useRef<NodeJS.Timeout | null>(null)
 		const knowledgeManagerRef = useRef<BmsKnowledgeManagerRef>(null)
 		const compileManagerRef = useRef<BmsAutosarCompileManagerRef>(null)
+
+		// Open the compile manager dialog when triggered by a keyboard shortcut / command
+		useEffect(() => {
+			if (showBmsAutosarCompileManager) {
+				compileManagerRef.current?.open()
+				setShowBmsAutosarCompileManager(false)
+			}
+		}, [showBmsAutosarCompileManager, setShowBmsAutosarCompileManager])
+
 		const [bmsAutosarMenuValue, setBmsAutosarMenuValue] = useState("")
 
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])

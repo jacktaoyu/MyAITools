@@ -29,10 +29,7 @@ function cleanupIfEmpty(taskId: string): void {
  * Subscribe to progress events for a specific task.
  * Returns an unsubscribe function.
  */
-export function subscribeToBmsAutosarProgress(
-	taskId: string,
-	subscriber: BmsAutosarProgressSubscriber,
-): () => void {
+export function subscribeToBmsAutosarProgress(taskId: string, subscriber: BmsAutosarProgressSubscriber): () => void {
 	const set = getSubscriptions(taskId)
 	const subscription: Subscription = { subscriber }
 	set.add(subscription)

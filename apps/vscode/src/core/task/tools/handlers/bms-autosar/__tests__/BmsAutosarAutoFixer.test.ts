@@ -2,15 +2,15 @@ import { strict as assert } from "node:assert"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { afterEach, beforeEach, describe, it } from "mocha"
 import type { ApiHandler, ApiHandlerModel } from "@core/api"
 import type { ApiStream } from "@core/api/transform/stream"
+import { afterEach, beforeEach, describe, it } from "mocha"
 import { autoFixBmsAutosarFile } from "../BmsAutosarAutoFixer"
 import { clearQualityReport, upsertQualityReportFile } from "../BmsAutosarQualityReportStore"
 
 function createMockApiHandler(responseText: string): ApiHandler {
 	return {
-		getModel: () => ({ id: "mock" } as ApiHandlerModel),
+		getModel: () => ({ id: "mock" }) as ApiHandlerModel,
 		createMessage: async function* (): ApiStream {
 			yield { type: "text", text: responseText }
 		},

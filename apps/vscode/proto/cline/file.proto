@@ -394,6 +394,13 @@ message DeleteSkillRequest {
   bool is_global = 3; // Whether this is a global or workspace skill
 }
 
+// Source location metadata for a knowledge snippet (e.g. PDF page or DOCX chapter).
+message BmsKnowledgeLocation {
+  string path = 1; // Source file path
+  int32 page = 2; // PDF page number (0 if unknown)
+  string chapter = 3; // DOCX chapter/section heading (empty if unknown)
+}
+
 // A single BMS AUTOSAR knowledge entry summary
 message BmsKnowledgeEntry {
   string topic = 1;
@@ -403,6 +410,11 @@ message BmsKnowledgeEntry {
   bool embedding_stale = 5;
   string content = 6;
   repeated string source_files = 7; // Files that contributed to this entry (e.g. folder import sources)
+  string source_path = 8; // Primary source file path for this entry
+  string source_hash = 9; // SHA-256 of the source file content
+  int64 source_mtime_ms = 10; // Source file mtime in milliseconds
+  int64 source_size = 11; // Source file size in bytes
+  repeated BmsKnowledgeLocation locations = 12; // Page/chapter locations (optional)
 }
 
 // Response containing all BMS AUTOSAR knowledge entries
@@ -465,6 +477,7 @@ message BmsKnowledgeSearchResult {
   string snippet = 4;
   repeated string tags = 5;
   repeated string source_files = 6;
+  repeated BmsKnowledgeLocation locations = 7;
 }
 
 // Response containing ranked BMS AUTOSAR knowledge search results.
