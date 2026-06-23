@@ -31,6 +31,7 @@ import {
 	loadBmsAutosarKnowledgeBaseWithSourcesCached,
 } from "./bms-autosar/BmsAutosarKnowledgeCache"
 import { retrieveRelevantKnowledgeResults } from "./bms-autosar/BmsAutosarSemanticRetrieval"
+import { type AsilLevel, getAsilDesignGuidelines, isAsil, normalizeAsilLevel } from "./bms-autosar/BmsAutosarAsil"
 import {
 	inferComponentTypeFromRequirements,
 	inferPortsFromRequirements,
@@ -49,6 +50,7 @@ interface BatchComponentConfig {
 	output_format?: string
 	composition_name?: string
 	components?: Array<{ name: string; type: string; path: string }>
+	asil_level?: string
 }
 
 interface BatchConfig {
@@ -191,6 +193,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 		const outputFormat = block.params.output_format || "both"
 		const compositionNameRaw = block.params.composition_name
 		const componentsRaw = block.params.components
+		const asilLevelRaw = (block.params as Record<string, string | undefined>)["asil_level"]
 
 		// Validate required parameters
 		if (!componentType) {
@@ -232,6 +235,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			requirements,
 			output_format: outputFormat,
 			composition_name: compositionNameRaw,
+			asil_level: asilLevelRaw,
 		}
 
 		try {
@@ -279,6 +283,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 		const components = item.components || []
 		const ports = item.ports || []
 		const runnables = item.runnables || []
+		const asilLevel = normalizeAsilLevel(item.asil_level)
 
 		const template = templates.templates[componentType]
 
@@ -304,6 +309,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			config.cwd,
 			knowledgeSources,
 			apiConfiguration,
+			asilLevel,
 		)
 	}
 
@@ -373,6 +379,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 		cwd: string,
 		knowledgeSources: { path: string; entries: BmsAutosarKnowledgeEntry[] }[],
 		apiConfiguration: ApiConfiguration,
+		asilLevel: AsilLevel,
 	): Promise<string> {
 		const workspaceName = getWorkspaceBasename(cwd)
 		const fileBase = componentName
@@ -385,10 +392,13 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 		})
 
 		// Retrieve knowledge entries most relevant to this generation request.
-		// Keep the query focused on the core generation target so embedding and
-		// lexical retrievals rank the right concepts instead of noisy template
-		// keywords.
-		const query = `${componentType} ${componentName} ${requirements}`.trim()
+		// Include the ASIL level in the query and prefer safety-related tags for
+		// ASIL components so retrieved knowledge contains ISO 26262 guidance.
+		const query = `${componentType} ${componentName} ${asilLevel} ${requirements}`.trim()
+		const retrievalTags = [componentType]
+		if (isAsil(asilLevel)) {
+			retrievalTags.push("safety")
+		}
 		const relevantResults = await retrieveRelevantKnowledgeResults({
 			sources: knowledgeSources,
 			query,
@@ -396,7 +406,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			topK: 5,
 			hybridWeight: 0.7,
 			scoreThreshold: 0,
-			tags: [componentType],
+			tags: retrievalTags,
 		})
 
 		const filesToGenerate: string[] = []
@@ -475,6 +485,15 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			ports: enrichedPorts,
 			runnables: enrichedRunnables,
 			components: components.length > 0 ? components : [],
+			asilLevel,
+			asil_label: asilLevel,
+			asil_QM: asilLevel === "QM",
+			asil_ASIL_A: asilLevel === "ASIL_A",
+			asil_ASIL_B: asilLevel === "ASIL_B",
+			asil_ASIL_C: asilLevel === "ASIL_C",
+			asil_ASIL_D: asilLevel === "ASIL_D",
+			asil_high: asilLevel === "ASIL_C" || asilLevel === "ASIL_D",
+			asil_any: asilLevel !== "QM",
 		}
 
 		const headerTemplate = template?.header_template || ""
@@ -504,6 +523,7 @@ You are generating an AUTOSAR Classic Platform artifact for a Battery Management
 - component_type: ${componentType}
 - component_name: ${componentName}
 - output_format: ${outputFormat}
+- asil_level: ${asilLevel}
 - ports: ${JSON.stringify(ports, null, 2)}
 - runnables: ${JSON.stringify(runnables, null, 2)}
 ${requirements ? `- requirements: ${requirements}` : ""}
@@ -522,6 +542,10 @@ ${
 							.join("\n\n")
 					: "No custom knowledge base entries matched this request. You can add relevant rules, templates, or conventions using the bms_autosar_knowledge tool."
 			}
+
+## ASIL Safety Context
+- Target ASIL level: ${asilLevel}
+${getAsilDesignGuidelines(asilLevel).split("\n").map((line) => `- ${line}`).join("\n")}
 
 ## Design Requirements
 1. Follow the BMS AUTOSAR skill conventions (load skill "bms-autosar" if not already active).

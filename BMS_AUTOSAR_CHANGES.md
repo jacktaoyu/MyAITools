@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-06-22（第二十七次迭代 / ASIL 等级支持）
+
+### 新增功能
+
+- **ISO 26262 ASIL 等级全链路支持**
+  - `proto/cline/bms_autosar.proto`：`GenerateBmsAutosarRequest` 新增 `string asil_level = 9`，可选值 `QM / ASIL_A / ASIL_B / ASIL_C / ASIL_D`。
+  - 重新生成 gRPC 桩代码。
+  - `BmsAutosarGenerateHandler`：
+    - 从 tool 参数读取 `asil_level` 并透传到生成蓝图；
+    - 在检索 query 中，对非 QM 等级自动追加 `safety asil` 关键词，召回安全相关规范；
+    - 在 LLM prompt 的 Design Requirements 中注入 ASIL 专项要求（防御性编程、范围检查、单一出口、WdgM、E2E、安全监控等），等级越高约束越严格。
+  - 新增 `src/core/task/tools/handlers/bms-autosar/BmsAutosarAsil.ts`：
+    - 提供 `normalizeAsilLevel`、`isHighAsil`、`isAsil`、`asilLabel`、`getAsilDesignGuidelines` 等工具函数；
+    - 支持 `ASIL-D`、`asil_d` 等大小写/连字符变体归一化。
+  - 内置模板 `assets/bms-autosar/templates.json` 注入 ASIL 上下文变量（`${AsilLevel}`、`${ASIL_LEVEL}`），支持按等级输出条件代码片段。
+
+- **Wizard UI 增加 ASIL 选择**
+  - `BmsAutosarWizard.tsx`：在 Output format 下方新增 ASIL level 下拉框，默认值 `QM`。
+  - `BmsAutosarWizard.utils.ts`：
+    - `WizardFormState` 新增 `asilLevel: AsilLevel`；
+    - `buildPrompt` 在 prompt 中说明 ASIL 等级；
+    - `exportBatchConfig` / `importBatchConfig` / `applyPreset` 读写 `asil_level` / `asilLevel`。
+  - `BmsAutosarWizard.presets.ts`：预设支持 `asilLevel` 字段。
+
+### 单元测试
+
+- 新增 `BmsAutosarAsil.test.ts`：覆盖 ASIL 归一化、高 ASIL 判断、标签、设计指南内容差异。
+- 扩展 `BmsAutosarGenerateHandler.test.ts`：覆盖 ASIL D 请求时 blueprint 包含 ASIL 上下文与安全关键词。
+- 全量单元测试通过：`npm run test:unit` 共 **1658** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（约 9.06 MB）。
+
+---
+
 ## 2026-06-22（第二十六次迭代 / RAG 检索增强）
 
 ### 新增功能

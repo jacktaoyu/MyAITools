@@ -27,6 +27,7 @@ import {
 	exportBatchConfig,
 	importBatchConfig,
 	validateForm,
+	ASIL_LEVELS,
 	type WizardFormState,
 } from "./BmsAutosarWizard.utils"
 
@@ -65,6 +66,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 		componentName: "",
 		requirements: "",
 		outputFormat: "both",
+		asilLevel: "QM",
 		portsJson: "",
 		runnablesJson: "",
 	})
@@ -149,6 +151,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 				componentType: form.componentType,
 				componentName: form.componentName,
 				outputFormat: form.outputFormat,
+				asilLevel: form.asilLevel,
 				requirements: form.requirements,
 				portsJson: form.portsJson,
 				runnablesJson: form.runnablesJson,
@@ -178,6 +181,7 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 					componentType: true,
 					componentName: true,
 					outputFormat: true,
+					asilLevel: true,
 					portsJson: true,
 					runnablesJson: true,
 					requirements: true,
@@ -324,6 +328,21 @@ const BmsAutosarWizard: React.FC<BmsAutosarWizardProps> = ({ onDone }) => {
 									</SelectContent>
 								</Select>
 								{renderFieldError("outputFormat")}
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="asil-level">ASIL level</Label>
+								<Select onValueChange={(value) => updateForm("asilLevel", value as WizardFormState["asilLevel"])} value={form.asilLevel}>
+									<SelectTrigger id="asil-level">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{ASIL_LEVELS.map((level) => (
+											<SelectItem key={level} value={level}>
+												{level === "QM" ? "QM (Quality Management)" : level.replace("_", " ")}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 
 							<div className="flex flex-col gap-2">

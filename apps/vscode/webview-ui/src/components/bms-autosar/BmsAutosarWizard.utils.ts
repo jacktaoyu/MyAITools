@@ -1,10 +1,15 @@
 import type { WizardPreset } from "./BmsAutosarWizard.presets"
 
+export type AsilLevel = "QM" | "ASIL_A" | "ASIL_B" | "ASIL_C" | "ASIL_D"
+
+export const ASIL_LEVELS: readonly AsilLevel[] = ["QM", "ASIL_A", "ASIL_B", "ASIL_C", "ASIL_D"]
+
 export interface WizardFormState {
 	componentType: string
 	componentName: string
 	requirements: string
 	outputFormat: string
+	asilLevel: AsilLevel
 	portsJson: string
 	runnablesJson: string
 }
@@ -14,6 +19,7 @@ export interface BatchComponentConfig {
 	component_name: string
 	requirements?: string
 	output_format?: string
+	asil_level?: AsilLevel
 	ports?: unknown[]
 	runnables?: unknown[]
 }
@@ -24,7 +30,7 @@ export interface BatchConfig {
 
 export function buildPrompt(state: WizardFormState): string {
 	const typeLabel = state.componentType
-	let prompt = `Generate a BMS AUTOSAR ${typeLabel} (component_type="${state.componentType}") named "${state.componentName.trim()}" with output_format="${state.outputFormat}".`
+	let prompt = `Generate a BMS AUTOSAR ${typeLabel} (component_type="${state.componentType}") named "${state.componentName.trim()}" with output_format="${state.outputFormat}" and asil_level="${state.asilLevel}".`
 	if (state.requirements.trim()) {
 		prompt += `\n\nRequirements:\n${state.requirements.trim()}`
 	}
@@ -48,8 +54,9 @@ export function validateJsonArray(value: string): { valid: boolean; error?: stri
 			return { valid: false, error: "Must be a JSON array." }
 		}
 		return { valid: true }
-	} catch (err: any) {
-		return { valid: false, error: `Invalid JSON: ${err.message}` }
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : String(err)
+		return { valid: false, error: `Invalid JSON: ${message}` }
 	}
 }
 
@@ -84,6 +91,7 @@ export function exportBatchConfig(state: WizardFormState): BatchConfig {
 		component_type: state.componentType,
 		component_name: state.componentName.trim(),
 		output_format: state.outputFormat,
+		asil_level: state.asilLevel,
 	}
 	if (state.requirements.trim()) {
 		config.requirements = state.requirements.trim()
@@ -112,6 +120,7 @@ export function importBatchConfig(config: BatchConfig): WizardFormState | { erro
 		componentName: item.component_name,
 		requirements: item.requirements || "",
 		outputFormat: item.output_format || "both",
+		asilLevel: item.asil_level || "QM",
 		portsJson: Array.isArray(item.ports) ? JSON.stringify(item.ports, null, 2) : "",
 		runnablesJson: Array.isArray(item.runnables) ? JSON.stringify(item.runnables, null, 2) : "",
 	}
@@ -123,6 +132,7 @@ export function applyPreset(preset: WizardPreset): WizardFormState {
 		componentName: preset.componentName,
 		requirements: preset.requirements,
 		outputFormat: preset.outputFormat,
+		asilLevel: (preset.asilLevel as AsilLevel) ?? "QM",
 		portsJson: preset.portsJson,
 		runnablesJson: preset.runnablesJson,
 	}

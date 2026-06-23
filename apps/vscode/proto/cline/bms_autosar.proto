@@ -28,6 +28,8 @@ message GenerateBmsAutosarRequest {
   string runnables_json = 7;
   // Fully-built prompt that will be sent to the task runtime.
   string prompt = 8;
+  // ASIL level: QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D.
+  string asil_level = 9;
 }
 
 // Progress event emitted during BMS AUTOSAR generation.

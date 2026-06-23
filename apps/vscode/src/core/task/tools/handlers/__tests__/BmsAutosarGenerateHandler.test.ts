@@ -458,4 +458,26 @@ describe("BmsAutosarGenerateHandler", () => {
 			await fs.unlink(configPath)
 		}
 	})
+
+	it("includes ASIL level and safety guidelines when asil_level is provided", async () => {
+		const { config } = createConfig()
+		const handler = new BmsAutosarGenerateHandler()
+
+		const result = await handler.execute(config, {
+			type: "tool_use",
+			name: ClineDefaultTool.BMS_AUTOSAR_GENERATE,
+			params: {
+				component_type: "bms_csc",
+				component_name: "BmsCscAsilD",
+				["asil_level" as string]: "ASIL_D",
+			},
+			partial: false,
+		})
+
+		const blueprint = result as string
+		assert.ok(blueprint.includes("asil_level: ASIL_D"))
+		assert.ok(blueprint.includes("ASIL Safety Context"))
+		assert.ok(blueprint.includes("WdgM"))
+		assert.ok(blueprint.includes("E2E"))
+	})
 })

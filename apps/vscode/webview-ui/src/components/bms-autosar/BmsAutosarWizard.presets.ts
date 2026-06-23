@@ -4,6 +4,7 @@ export interface WizardPreset {
 	portsJson: string
 	runnablesJson: string
 	outputFormat: string
+	asilLevel?: string
 }
 
 export const COMPONENT_PRESETS: Record<string, WizardPreset> = {
