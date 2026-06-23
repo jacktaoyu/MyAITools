@@ -115,6 +115,8 @@ message OpenTerminalResponse {}
 // Execute a command in the terminal
 message ExecuteCommandInTerminalRequest {
   string command = 1; // The command to execute
+  // Optional working directory. When omitted, the host may infer it from the command.
+  string cwd = 2;
 }
 
 message ExecuteCommandInTerminalResponse {

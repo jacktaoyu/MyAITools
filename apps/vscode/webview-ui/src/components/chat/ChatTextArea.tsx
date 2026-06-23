@@ -4,7 +4,7 @@ import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state"
 import { type SlashCommand } from "@shared/slashCommands"
 import { Mode } from "@shared/storage/types"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 
 import type React from "react"
 import { forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
@@ -43,6 +43,8 @@ import {
 } from "@/utils/slash-commands"
 const BmsKnowledgeManager = lazy(() => import("@/components/chat/BmsKnowledgeManager"))
 const BmsAutosarCompileManager = lazy(() => import("@/components/chat/BmsAutosarCompileManager"))
+import type { BmsKnowledgeManagerRef } from "@/components/chat/BmsKnowledgeManager"
+import type { BmsAutosarCompileManagerRef } from "@/components/chat/BmsAutosarCompileManager"
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
 import ServersToggleModal from "./ServersToggleModal"
 
@@ -259,6 +261,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const unsupportedFileTimerRef = useRef<NodeJS.Timeout | null>(null)
 		const [showDimensionError, setShowDimensionError] = useState(false)
 		const dimensionErrorTimerRef = useRef<NodeJS.Timeout | null>(null)
+		const knowledgeManagerRef = useRef<BmsKnowledgeManagerRef>(null)
+		const compileManagerRef = useRef<BmsAutosarCompileManagerRef>(null)
+		const [bmsAutosarMenuValue, setBmsAutosarMenuValue] = useState("")
 
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
@@ -1367,6 +1372,31 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			.togglePlanActKeys.replace("Meta", metaKeyChar)
 			.replace(/.$/, (match) => match.toUpperCase())
 
+		const handleBmsAutosarMenuChange = useCallback(
+			(e: Event | React.FormEvent<HTMLElement>) => {
+				const value = (e.target as HTMLSelectElement).value
+				setBmsAutosarMenuValue("")
+				switch (value) {
+					case "wizard":
+						navigateToBmsAutosarWizard()
+						break
+					case "knowledge":
+						knowledgeManagerRef.current?.open()
+						break
+					case "compile":
+						compileManagerRef.current?.open()
+						break
+					case "quality":
+						navigateToBmsAutosarQualityReport()
+						break
+					case "graph":
+						navigateToBmsAutosarKnowledgeGraph()
+						break
+				}
+			},
+			[navigateToBmsAutosarWizard, navigateToBmsAutosarQualityReport, navigateToBmsAutosarKnowledgeGraph],
+		)
+
 		return (
 			<div>
 				<div
@@ -1597,54 +1627,26 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</Tooltip>
 
 							<Suspense fallback={null}>
-								<BmsKnowledgeManager />
+								<BmsKnowledgeManager ref={knowledgeManagerRef} />
 							</Suspense>
 
 							<Suspense fallback={null}>
-								<BmsAutosarCompileManager />
+								<BmsAutosarCompileManager ref={compileManagerRef} />
 							</Suspense>
 
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<VSCodeButton
-										appearance="icon"
-										onClick={navigateToBmsAutosarWizard}
-										style={{ padding: 0 }}>
-										<ButtonContainer>
-											<i className="codicon codicon-circuit-board" style={{ fontSize: "12.5px" }} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-								<TooltipContent side="top">BMS AUTOSAR Generator</TooltipContent>
-							</Tooltip>
-
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<VSCodeButton
-										appearance="icon"
-										onClick={navigateToBmsAutosarQualityReport}
-										style={{ padding: 0 }}>
-										<ButtonContainer>
-											<i className="codicon codicon-verify" style={{ fontSize: "12.5px" }} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-								<TooltipContent side="top">BMS AUTOSAR Quality Report</TooltipContent>
-							</Tooltip>
-
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<VSCodeButton
-										appearance="icon"
-										onClick={navigateToBmsAutosarKnowledgeGraph}
-										style={{ padding: 0 }}>
-										<ButtonContainer>
-											<i className="codicon codicon-graph" style={{ fontSize: "12.5px" }} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-								<TooltipContent side="top">ARXML Knowledge Graph</TooltipContent>
-							</Tooltip>
+							<VSCodeDropdown
+								className="text-xs"
+								style={{ width: "110px" }}
+								title="BMS AUTOSAR Tools"
+								value={bmsAutosarMenuValue}
+								onChange={handleBmsAutosarMenuChange}>
+								<VSCodeOption value="">BMS AUTOSAR</VSCodeOption>
+								<VSCodeOption value="wizard">Generator</VSCodeOption>
+								<VSCodeOption value="knowledge">Knowledge</VSCodeOption>
+								<VSCodeOption value="compile">Compile</VSCodeOption>
+								<VSCodeOption value="quality">Quality Report</VSCodeOption>
+								<VSCodeOption value="graph">Knowledge Graph</VSCodeOption>
+							</VSCodeDropdown>
 
 							<ServersToggleModal />
 

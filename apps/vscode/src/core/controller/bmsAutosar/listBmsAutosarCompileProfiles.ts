@@ -29,6 +29,7 @@ export async function listBmsAutosarCompileProfiles(
 				name: p.name,
 				workflow: p.workflow,
 				command: p.command || "",
+				commands: p.commands || [],
 				workingDirRelative: p.workingDirRelative || "",
 				jobs: p.jobs ?? 32,
 				isBuiltin: p.isBuiltin,

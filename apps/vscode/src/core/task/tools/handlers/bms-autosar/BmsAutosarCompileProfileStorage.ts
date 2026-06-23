@@ -11,21 +11,33 @@ export interface BmsAutosarCompileProfile {
 	workflow: "appl" | "launch";
 	/** Optional explicit command. When omitted, the handler builds a default command. */
 	command?: string;
+	/** Optional ordered command list. When provided, each entry is executed sequentially. */
+	commands?: string[];
 	/** Working directory relative to the workspace root (e.g. "appl" or empty). */
 	workingDirRelative?: string;
 	/** Parallel job count passed to `-j` (default 32). */
 	jobs?: number;
 }
 
+export interface BmsAutosarCompileProfileOverride
+	extends Pick<BmsAutosarCompileProfile, "command" | "commands" | "workingDirRelative" | "jobs"> {}
+
 export interface BmsAutosarCompileProfilesData {
 	version: string;
 	lastSelectedId: string;
 	profiles: BmsAutosarCompileProfile[];
+	/** Overrides for built-in profiles, keyed by profile id. */
+	builtinOverrides?: Record<string, BmsAutosarCompileProfileOverride>;
 }
 
 export interface MergedBmsAutosarCompileProfile extends BmsAutosarCompileProfile {
 	isBuiltin: boolean;
 	scope: BmsAutosarCompileProfileScope | "";
+}
+
+export interface BmsCompileCommandStep {
+	cwd: string;
+	command: string;
 }
 
 const PROFILES_FILE_NAME = "compile-profiles.json";
@@ -84,6 +96,9 @@ export async function loadBmsCompileProfiles(
 			version: parsed.version || "1.0.0",
 			lastSelectedId: parsed.lastSelectedId || BUILTIN_COMPILE_PROFILES[0].id,
 			profiles: Array.isArray(parsed.profiles) ? parsed.profiles : [],
+			builtinOverrides: parsed.builtinOverrides && typeof parsed.builtinOverrides === "object"
+				? parsed.builtinOverrides
+				: {},
 		};
 	} catch {
 		return createEmptyProfiles();
@@ -127,17 +142,48 @@ export async function saveBmsCompileProfile(
 	return profile.id;
 }
 
+export async function saveBmsCompileBuiltinOverride(
+	cwd: string,
+	scope: BmsAutosarCompileProfileScope,
+	id: string,
+	override: BmsAutosarCompileProfileOverride,
+): Promise<string> {
+	const builtin = BUILTIN_COMPILE_PROFILES.find((p) => p.id === id);
+	if (!builtin) {
+		throw new Error(`Profile id "${id}" is not a built-in profile.`);
+	}
+
+	const data = await loadBmsCompileProfiles(cwd, scope);
+	data.builtinOverrides = data.builtinOverrides || {};
+	data.builtinOverrides[id] = {
+		...data.builtinOverrides[id],
+		...override,
+	};
+
+	await writeBmsCompileProfiles(cwd, scope, data);
+	return id;
+}
+
 export async function deleteBmsCompileProfile(
 	cwd: string,
 	scope: BmsAutosarCompileProfileScope,
 	id: string,
 ): Promise<boolean> {
+	const data = await loadBmsCompileProfiles(cwd, scope);
 	const isBuiltin = BUILTIN_COMPILE_PROFILES.some((p) => p.id === id);
+
 	if (isBuiltin) {
-		return false;
+		if (!data.builtinOverrides?.[id]) {
+			return false;
+		}
+		delete data.builtinOverrides[id];
+		if (data.lastSelectedId === id) {
+			data.lastSelectedId = BUILTIN_COMPILE_PROFILES[0].id;
+		}
+		await writeBmsCompileProfiles(cwd, scope, data);
+		return true;
 	}
 
-	const data = await loadBmsCompileProfiles(cwd, scope);
 	const index = data.profiles.findIndex((p) => p.id === id);
 	if (index < 0) {
 		return false;
@@ -169,7 +215,11 @@ export async function getMergedBmsCompileProfiles(
 	lastSelectedId: string;
 }> {
 	const scopes: BmsAutosarCompileProfileScope[] =
-		requestedScope === "global" ? ["global"] : requestedScope === "workspace" ? ["workspace"] : ["workspace", "global"];
+		requestedScope === "global"
+			? ["global"]
+			: requestedScope === "workspace"
+				? ["workspace"]
+				: ["global", "workspace"];
 
 	const profilesById = new Map<string, MergedBmsAutosarCompileProfile>();
 	for (const builtin of BUILTIN_COMPILE_PROFILES) {
@@ -182,6 +232,14 @@ export async function getMergedBmsCompileProfiles(
 		if (lastSelectedId === "") {
 			lastSelectedId = data.lastSelectedId;
 		}
+
+		for (const [id, override] of Object.entries(data.builtinOverrides || {})) {
+			const existing = profilesById.get(id);
+			if (existing && existing.isBuiltin) {
+				profilesById.set(id, { ...existing, ...override, isBuiltin: true, scope });
+			}
+		}
+
 		for (const profile of data.profiles) {
 			profilesById.set(profile.id, { ...profile, isBuiltin: false, scope });
 		}
@@ -202,20 +260,48 @@ export function findBmsCompileProfile(
 	return profiles.find((p) => p.id === id);
 }
 
+export function buildBmsCompileCommands(
+	workspaceRoot: string,
+	profile: BmsAutosarCompileProfile,
+): BmsCompileCommandStep[] {
+	const baseCwd = path.join(workspaceRoot, profile.workingDirRelative || "");
+	const jobs = profile.jobs ?? 32;
+
+	if (profile.commands && profile.commands.length > 0) {
+		return profile.commands.map((command) => ({ cwd: baseCwd, command }));
+	}
+
+	if (profile.command) {
+		return [{ cwd: baseCwd, command: profile.command }];
+	}
+
+	if (profile.workflow === "appl") {
+		return [{ cwd: baseCwd, command: `m -j${jobs}` }];
+	}
+
+	return [
+		{ cwd: workspaceRoot, command: "launch.bat" },
+		{ cwd: workspaceRoot, command: `make -j${jobs}` },
+	];
+}
+
 export function buildBmsCompileCommand(
 	workspaceRoot: string,
 	profile: BmsAutosarCompileProfile,
 ): string {
-	if (profile.command) {
-		return `cd "${path.join(workspaceRoot, profile.workingDirRelative || "")}" && ${profile.command}`;
+	const steps = buildBmsCompileCommands(workspaceRoot, profile);
+	if (steps.length === 0) {
+		return "";
 	}
 
-	const workingDir = path.join(workspaceRoot, profile.workingDirRelative || "");
-	const jobs = profile.jobs ?? 32;
-
-	if (profile.workflow === "appl") {
-		return `cd "${workingDir}" && m -j${jobs}`;
+	const segments: string[] = [];
+	let lastCwd = "";
+	for (const { cwd, command } of steps) {
+		if (cwd !== lastCwd) {
+			segments.push(`cd "${cwd}"`);
+			lastCwd = cwd;
+		}
+		segments.push(command);
 	}
-
-	return `cd "${workspaceRoot}" && launch.bat && make -j${jobs}`;
+	return segments.join(" && ");
 }

@@ -6,10 +6,12 @@ import { afterEach, beforeEach, describe, it } from "mocha";
 import {
 	BUILTIN_COMPILE_PROFILES,
 	buildBmsCompileCommand,
+	buildBmsCompileCommands,
 	deleteBmsCompileProfile,
 	getBmsCompileProfilesDir,
 	getMergedBmsCompileProfiles,
 	loadBmsCompileProfiles,
+	saveBmsCompileBuiltinOverride,
 	saveBmsCompileProfile,
 	setLastSelectedCompileProfile,
 } from "../BmsAutosarCompileProfileStorage";
@@ -59,6 +61,34 @@ describe("BmsAutosarCompileProfileStorage", () => {
 		);
 	});
 
+	it("saves built-in overrides and merges them", async () => {
+		await saveBmsCompileBuiltinOverride(tempDir, "workspace", "appl-m", { jobs: 8 });
+		const { profiles } = await getMergedBmsCompileProfiles(tempDir, "workspace");
+		const profile = profiles.find((p) => p.id === "appl-m");
+		assert.ok(profile);
+		assert.equal(profile.jobs, 8);
+		assert.equal(profile.scope, "workspace");
+	});
+
+	it("workspace override takes precedence over global override", async () => {
+		await saveBmsCompileBuiltinOverride(tempDir, "global", "appl-m", { jobs: 4 });
+		await saveBmsCompileBuiltinOverride(tempDir, "workspace", "appl-m", { jobs: 16 });
+		const { profiles } = await getMergedBmsCompileProfiles(tempDir);
+		const profile = profiles.find((p) => p.id === "appl-m");
+		assert.equal(profile?.jobs, 16);
+	});
+
+	it("deletes a built-in override but not the built-in itself", async () => {
+		await saveBmsCompileBuiltinOverride(tempDir, "workspace", "appl-m", { jobs: 8 });
+		let deleted = await deleteBmsCompileProfile(tempDir, "workspace", "appl-m");
+		assert.equal(deleted, true);
+		const { profiles } = await getMergedBmsCompileProfiles(tempDir, "workspace");
+		const profile = profiles.find((p) => p.id === "appl-m");
+		assert.equal(profile?.jobs, 32);
+		deleted = await deleteBmsCompileProfile(tempDir, "workspace", "appl-m");
+		assert.equal(deleted, false);
+	});
+
 	it("persists last selected profile id", async () => {
 		await saveBmsCompileProfile(tempDir, "workspace", {
 			id: "custom",
@@ -84,11 +114,6 @@ describe("BmsAutosarCompileProfileStorage", () => {
 		assert.equal(data.lastSelectedId, BUILTIN_COMPILE_PROFILES[0].id);
 	});
 
-	it("does not delete built-in profiles", async () => {
-		const deleted = await deleteBmsCompileProfile(tempDir, "workspace", "appl-m");
-		assert.equal(deleted, false);
-	});
-
 	it("builds the default appl command", () => {
 		const command = buildBmsCompileCommand("/workspace", {
 			id: "appl-m",
@@ -108,6 +133,20 @@ describe("BmsAutosarCompileProfileStorage", () => {
 			jobs: 32,
 		});
 		assert.equal(command, 'cd "/workspace" && launch.bat && make -j32');
+	});
+
+	it("builds ordered commands", () => {
+		const steps = buildBmsCompileCommands("/workspace", {
+			id: "custom",
+			name: "Custom",
+			workflow: "appl",
+			commands: ["make clean", "make -j16"],
+			workingDirRelative: "appl",
+		});
+		assert.equal(steps.length, 2);
+		assert.equal(steps[0].command, "make clean");
+		assert.equal(steps[1].command, "make -j16");
+		assert.equal(steps[0].cwd, "/workspace/appl");
 	});
 
 	it("returns the expected profiles directory", () => {

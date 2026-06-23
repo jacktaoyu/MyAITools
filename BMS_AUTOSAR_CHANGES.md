@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-06-22（第二十九次迭代 / 编译构建集成优化与统一入口菜单）
+
+### 新增功能
+
+- **编译配置能力增强**
+  - `proto/cline/bms_autosar.proto`：
+    - `BmsAutosarCompileProfile` 新增 `repeated string commands = 9`，支持多步命令序列。
+    - `CompileBmsAutosarResponse` 新增 `terminal_id`、`initial_output`。
+    - 新增 RPC `getBmsAutosarCompileStatus`：供 Webview 轮询终端编译状态。
+  - `BmsAutosarCompileProfileStorage.ts`：
+    - 新增 `builtinOverrides` 字段，允许用户覆盖内置 profile 的 name/workflow/command/commands/workingDirRelative/jobs。
+    - `buildBmsCompileCommand` 改为返回 `{ cwd, command }[]` 步骤数组，支持单条或多条命令。
+    - 合并优先级：workspace override > global override > built-in。
+  - `executeCommandInTerminal.ts`：
+    - 复用 `VscodeTerminalManager`，统一创建/复用名为 **BMS Build** 的终端。
+    - 返回 `terminal_id` 与初始输出，供后续状态查询。
+  - 新增 `CompileStatusTracker.ts`：
+    - 按 `terminal_id` 记录终端输出、完成状态、退出码与错误信息。
+    - 支持 Webview 轮询 `getBmsAutosarCompileStatus`。
+  - 新增 controller `getBmsAutosarCompileStatus.ts`。
+
+- **Webview 编译管理器升级**
+  - `BmsAutosarCompileManager.tsx`：
+    - 选中内置 profile 时可启用 **Edit defaults**，保存为 override。
+    - 命令编辑框支持多行输入，每行对应一个执行步骤。
+    - 点击 **Run Compile** 后启动轮询，实时显示终端输出与完成状态。
+
+- **统一 BMS AUTOSAR 入口菜单**
+  - `ChatTextArea.tsx` 工具栏将 Generator、Knowledge、Compile、Quality Report、Knowledge Graph 五个入口合并为单个 **BMS AUTOSAR** 下拉菜单。
+  - 选择 **Knowledge / Compile** 时通过 `forwardRef` 打开对应对话框；其余项直接跳转对应视图。
+  - `BmsKnowledgeManager.tsx` 与 `BmsAutosarCompileManager.tsx` 改为仅渲染对话框内容，内部触发按钮移除。
+
+### 单元测试
+
+- 更新 `BmsAutosarCompileProfileStorage.test.ts`：覆盖多步命令、`builtinOverrides`、命令步骤拆分。
+- 更新 `compileBmsAutosar.test.ts`：覆盖 `commands` 字段与 `terminal_id` 返回。
+- 全量单元测试通过：`npm run test:unit` 共 **1674** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`。
+
+---
+
 ## 2026-06-22（第二十八次迭代 / 编译构建集成）
 
 ### 新增功能

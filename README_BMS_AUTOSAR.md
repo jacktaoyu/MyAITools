@@ -115,14 +115,16 @@ Wizard 与批量配置均支持选择目标 ASIL 等级：
 
 ### 2.8 编译构建集成
 
-在 Chat 工具栏打开 **BMS AUTOSAR Compile** 对话框，即可选择并运行编译配置：
+在 Chat 工具栏的 **BMS AUTOSAR** 下拉菜单中选择 **Compile**，即可打开编译管理对话框：
 
 - **内置配置**：
   - `Appl: m -j32` — 在 `<workspace>/appl` 目录执行 `m -j32`。
   - `Root: launch.bat → make -j32` — 在 workspace 根目录执行 `launch.bat` 后再执行 `make -j32`。
+- **内置配置覆盖**：选中内置 profile 后可点击 **Edit defaults** 修改 name、workflow、工作目录、并发数、命令等，并以 override 形式持久化（不改动源码内置配置）。
+- **多步命令**：profile 支持 `commands` 数组，每行一条命令，按顺序在指定工作目录执行；也支持保留单条 `command` 以兼容旧配置。
 - **自定义配置**：支持新增、编辑、删除自定义 profile；可覆盖 workflow、工作目录、并发任务数（`-j`）、完整命令。
-- **配置持久化**：workspace 配置保存在 `<cwd>/.cline/bms-autosar/compile-profiles.json`，global 配置保存在 `~/.cline/bms-autosar/compile-profiles.json`。
-- **终端执行**：点击 **Run Compile** 后，会在 VS Code 集成终端中打开并执行对应命令，便于查看实时编译输出。
+- **配置持久化**：workspace 配置保存在 `<cwd>/.cline/bms-autosar/compile-profiles.json`，global 配置保存在 `~/.cline/bms-autosar/compile-profiles.json`；合并优先级为 workspace override > global override > built-in。
+- **终端执行与状态轮询**：点击 **Run Compile** 后，会在名为 **BMS Build** 的 VS Code 集成终端中执行命令，并在对话框内实时轮询显示终端输出、完成状态与退出码。
 
 ---
 

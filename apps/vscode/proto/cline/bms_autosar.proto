@@ -70,6 +70,8 @@ message BmsAutosarCompileProfile {
   bool is_builtin = 7;
   // Scope: "workspace", "global", or empty for built-in profiles.
   string scope = 8;
+  // Optional ordered command list. When provided, each entry is executed sequentially.
+  repeated string commands = 9;
 }
 
 message CompileBmsAutosarRequest {

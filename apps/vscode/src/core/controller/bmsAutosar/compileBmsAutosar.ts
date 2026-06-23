@@ -1,6 +1,7 @@
 import type { Controller } from "..";
 import {
 	buildBmsCompileCommand,
+	buildBmsCompileCommands,
 	findBmsCompileProfile,
 	getMergedBmsCompileProfiles,
 	setLastSelectedCompileProfile,
@@ -31,7 +32,13 @@ export async function compileBmsAutosar(
 		throw new Error(`Compile profile "${request.profileId}" not found.`);
 	}
 
+	const steps = buildBmsCompileCommands(workspaceRoot, profile);
+	if (steps.length === 0) {
+		throw new Error(`Compile profile "${profile.id}" has no commands.`);
+	}
+
 	const command = buildBmsCompileCommand(workspaceRoot, profile);
+	const cwd = steps[0].cwd;
 	const scopeToUpdate: BmsAutosarCompileProfileScope =
 		profile.scope === "global" ? "global" : "workspace";
 	await setLastSelectedCompileProfile(
@@ -44,7 +51,7 @@ export async function compileBmsAutosar(
 
 	try {
 		const response = await HostProvider.workspace.executeCommandInTerminal(
-			ExecuteCommandInTerminalRequest.create({ command }),
+			ExecuteCommandInTerminalRequest.create({ command, cwd }),
 		);
 
 		if (!response.success) {

@@ -1,6 +1,6 @@
 import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react"
 import {
 	Dialog,
 	DialogContent,
@@ -31,7 +31,13 @@ type Notice = {
 
 type Scope = "workspace" | "global"
 
-const BmsKnowledgeManager: React.FC = () => {
+export interface BmsKnowledgeManagerRef {
+	open: () => void
+}
+
+type BmsKnowledgeManagerProps = {}
+
+const BmsKnowledgeManager = forwardRef<BmsKnowledgeManagerRef, BmsKnowledgeManagerProps>(function BmsKnowledgeManager(_props, ref) {
 	const [notice, setNotice] = useState<Notice | null>(null)
 	const [isOpen, setIsOpen] = useState(false)
 	const [entries, setEntries] = useState<BmsKnowledgeEntry[]>([])
@@ -60,6 +66,8 @@ const BmsKnowledgeManager: React.FC = () => {
 		setNotice({ message, type })
 		window.setTimeout(() => setNotice(null), 3000)
 	}, [])
+
+	useImperativeHandle(ref, () => ({ open: () => setIsOpen(true) }), [])
 
 	const fetchEntries = useCallback(async () => {
 		setLoading(true)
@@ -356,49 +364,7 @@ const BmsKnowledgeManager: React.FC = () => {
 				</div>
 			)}
 
-			<Tooltip>
-				<TooltipContent>Add BMS Knowledge from File</TooltipContent>
-				<TooltipTrigger>
-					<VSCodeButton
-						appearance="icon"
-						aria-label="Add BMS Knowledge from File"
-						className="p-0 m-0 flex items-center"
-						data-testid="bms-knowledge-add-button"
-						onClick={handleAdd}>
-						<i className="codicon codicon-book" style={{ fontSize: "12.5px" }} />
-					</VSCodeButton>
-				</TooltipTrigger>
-			</Tooltip>
-
-			<Tooltip>
-				<TooltipContent>Add BMS Knowledge from Folder</TooltipContent>
-				<TooltipTrigger>
-					<VSCodeButton
-						appearance="icon"
-						aria-label="Add BMS Knowledge from Folder"
-						className="p-0 m-0 flex items-center"
-						data-testid="bms-knowledge-add-folder-button"
-						onClick={handleAddFolder}>
-						<i className="codicon codicon-folder-library" style={{ fontSize: "12.5px" }} />
-					</VSCodeButton>
-				</TooltipTrigger>
-			</Tooltip>
-
 			<Dialog onOpenChange={setIsOpen} open={isOpen}>
-				<Tooltip>
-					<TooltipContent>Manage BMS Knowledge</TooltipContent>
-					<TooltipTrigger>
-						<VSCodeButton
-							appearance="icon"
-							aria-label="Manage BMS Knowledge"
-							className="p-0 m-0 flex items-center"
-							data-testid="bms-knowledge-manage-button"
-							onClick={() => setIsOpen(true)}>
-							<i className="codicon codicon-list-unordered" style={{ fontSize: "12.5px" }} />
-						</VSCodeButton>
-					</TooltipTrigger>
-				</Tooltip>
-
 				<DialogContent className="max-w-lg">
 					<DialogHeader>
 						<DialogTitle>BMS AUTOSAR Knowledge</DialogTitle>
@@ -427,6 +393,32 @@ const BmsKnowledgeManager: React.FC = () => {
 							Global
 						</button>
 						<div className="flex-1" />
+						<Tooltip>
+							<TooltipContent>Add BMS Knowledge from File</TooltipContent>
+							<TooltipTrigger>
+								<VSCodeButton
+									appearance="icon"
+									aria-label="Add BMS Knowledge from File"
+									className="p-0 m-0 flex items-center"
+									data-testid="bms-knowledge-add-button"
+									onClick={handleAdd}>
+									<i className="codicon codicon-book" style={{ fontSize: "12.5px" }} />
+								</VSCodeButton>
+							</TooltipTrigger>
+						</Tooltip>
+						<Tooltip>
+							<TooltipContent>Add BMS Knowledge from Folder</TooltipContent>
+							<TooltipTrigger>
+								<VSCodeButton
+									appearance="icon"
+									aria-label="Add BMS Knowledge from Folder"
+									className="p-0 m-0 flex items-center"
+									data-testid="bms-knowledge-add-folder-button"
+									onClick={handleAddFolder}>
+									<i className="codicon codicon-folder-library" style={{ fontSize: "12.5px" }} />
+								</VSCodeButton>
+							</TooltipTrigger>
+						</Tooltip>
 						<BmsAutosarQualityPanel />
 						<BmsAutosarKnowledgeGraphView scope={scope} />
 						<Tooltip>
@@ -829,6 +821,6 @@ const BmsKnowledgeManager: React.FC = () => {
 			</Dialog>
 		</>
 	)
-}
+})
 
 export default BmsKnowledgeManager
