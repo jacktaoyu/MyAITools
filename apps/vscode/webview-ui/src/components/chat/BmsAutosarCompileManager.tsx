@@ -287,7 +287,6 @@ const BmsAutosarCompileManager: React.FC = () => {
 									<VSCodeTextField
 										className="w-20"
 										placeholder="Jobs"
-										type="number"
 										value={String(editingProfile.jobs ?? 32)}
 										onChange={(e: any) =>
 											setEditingProfile((prev) => ({
