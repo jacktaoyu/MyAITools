@@ -68,9 +68,13 @@ Wizard 与批量配置均支持选择目标 ASIL 等级：
 - 保存 `.c/.h` 文件时，质量门会按文件头 `\ASIL level:` 注释或生成参数运行 ASIL 安全专项检查，并产出带 `MISRA` / `ASIL` 分类的质量问题；
 - 在 BMS Quality Report 中可按分类（MISRA / ASIL / STRUCTURAL / COMPILE）筛选问题。
 
-### 2.3 RAG 知识库增强检索
+### 2.3 RAG 知识库增强检索与增量更新
 
 - **Hybrid 检索**：Embedding 余弦相似度 + BM25 词法分，权重可调；
+- **源文件元数据**：每个知识条目记录 `sourcePath`、`sourceHash`（sha256）、`sourceMtimeMs`、`sourceSize`、`contentHash`、`locations`（PDF 页码 / DOCX 章节），支持追溯与去重；
+- **增量导入**：文件夹导入时按文件生成 entry，未变更文件直接复用旧条目与向量缓存，仅新增/修改/删除文件触发重新提取；
+- **本地向量缓存**：embedding 按 `contentHash + model` 落盘到 `~/.cline/bms-autosar/cache/vectors/`，`knowledge.json` 不再存储向量，体积大幅缩小；旧 knowledge.json 中的内嵌 embedding 会在首次加载时自动迁移到缓存；
+- **格式扩展**：新增 `.dbc` 解析（`BO_` / `SG_` / `BA_` / `VAL_`），PDF 按页、DOCX 按章节返回位置元数据，ARXML 按结构标签感知 chunk 并保留 `SHORT-NAME` / `UUID`；
 - **领域 Query 扩展**：自动识别 AUTOSAR/BMS 缩写并扩展同义词，例如：
   - CSC → CellSupervisionCircuit / AFE / AnalogFrontEnd
   - SOC → StateOfCharge
@@ -128,6 +132,22 @@ Wizard 与批量配置均支持选择目标 ASIL 等级：
 - **自定义配置**：支持新增、编辑、删除自定义 profile；可覆盖 workflow、工作目录、并发任务数（`-j`）、完整命令。
 - **配置持久化**：workspace 配置保存在 `<cwd>/.cline/bms-autosar/compile-profiles.json`，global 配置保存在 `~/.cline/bms-autosar/compile-profiles.json`；合并优先级为 workspace override > global override > built-in。
 - **终端执行与状态轮询**：点击 **Run Compile** 后，会在名为 **BMS Build** 的 VS Code 集成终端中执行命令，并在对话框内实时轮询显示终端输出、完成状态与退出码。
+
+### 2.9 命令快捷键与激活事件
+
+- 新增命令：
+  - `BMS AUTOSAR: Open Compile Manager`（`Cmd/Ctrl+Shift+B`）
+  - `BMS AUTOSAR: Open Generator`（`Cmd/Ctrl+Shift+G`）
+- `activationEvents` 已注册 BMS 相关命令，触发命令时插件会自动激活，无需先打开侧边栏。
+
+### 2.10 发布自动化
+
+新增 `.github/workflows/ext-vscode-release-on-tag.yml`：
+
+- 触发条件：推送 `v*` 标签；
+- 自动复用现有测试工作流；
+- 通过 `npm run package:vsix` 打包插件；
+- 使用 `softprops/action-gh-release@v2` 创建/更新 GitHub Release 并上传 VSIX。
 
 ---
 
@@ -252,7 +272,8 @@ components:
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                        知识/质量层                           │
-│  BMS 知识库 │ 用户模板 │ MISRA 检查器 │ 质量报告 │ ARXML 图谱 │
+│  BMS 知识库 │ 源文件元数据 │ 向量缓存 │ 用户模板 │ MISRA 检查 │
+│  质量报告 │ ARXML 图谱 │ 自动修复器                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -283,8 +304,8 @@ npm run package:vsix  # 构建可安装插件
 
 - ✅ `check-types` 通过
 - ✅ `lint` 通过
-- ✅ `test:unit` **1647 项通过**
-- ✅ `package:vsix` 成功生成 `.vsix`（9.1 MB）
+- ✅ `test:unit` **1685 项通过**
+- ✅ `package:vsix` 成功生成 `.vsix`（9.09 MB）
 
 ---
 
@@ -298,11 +319,17 @@ apps/vscode/
 │   ├── BmsAutosarQueryExpander.ts      # AUTOSAR query 扩展
 │   ├── BmsAutosarReranker.ts           # LLM 重排序
 │   ├── BmsAutosarKnowledgeGraph.ts     # ARXML 图谱构建
+│   ├── BmsAutosarKnowledgeCache.ts     # 模板/向量/图谱缓存
+│   ├── BmsAutosarKnowledgeTypes.ts     # 知识库类型与 ARXML chunk
+│   ├── BmsAutosarDbcParser.ts          # DBC 解析
 │   ├── BmsAutosarMisraChecker.ts       # MISRA 静态检查
 │   ├── BmsAutosarAutoFixer.ts          # LLM 自动修复
 │   ├── BmsAutosarTemplateStorage.ts    # 用户模板存储
 │   └── BmsAutosarTemplateRenderer.ts   # 模板渲染引擎
 ├── src/core/controller/file/           # gRPC controller 实现
+├── src/core/controller/ui/             # UI 事件订阅与命令事件
+│   ├── subscribeToBmsAutosarCompile.ts
+│   └── subscribeToBmsAutosarGenerator.ts
 ├── webview-ui/src/components/bms-autosar/  # Webview 面板
 │   ├── BmsAutosarWizard.tsx
 │   ├── BmsAutosarQualityReportView.tsx
@@ -319,7 +346,9 @@ apps/vscode/
 2. **ARXML 图谱增强检索**：首次将 ARXML 知识图谱融入代码生成的上下文检索；
 3. **LLM 二阶段重排**：在 embedding+BM25 后引入 LLM-as-reranker，兼顾效率与精度；
 4. **生成-检查-修复闭环**：MISRA 检查与 LLM 自动修复形成完整质量闭环；
-5. **工程可落地**：完整 VS Code 插件形态，可直接安装到工程师日常开发环境。
+5. **知识库工程化**：源文件元数据 + 增量更新 + 本地向量缓存，让知识库在真实项目中可维护、可复用；
+6. **DBC / PDF / DOCX 结构化导入**：扩展知识库可消费的工程文档格式，并保留位置溯源；
+7. **工程级交付**：命令快捷键、激活事件、编译管理器与 tag 触发的自动 Release 工作流，直接服务工程师日常开发。
 
 ---
 
