@@ -1,13 +1,11 @@
 import { BmsAutosarKnowledgeGraphEdge, BmsAutosarKnowledgeGraphNode } from "@shared/proto/cline/file"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import cytoscape from "cytoscape"
+import coseBilkent from "cytoscape-cose-bilkent"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useBmsAutosarNotice } from "./useBmsAutosarNotice"
 
-interface GraphNode extends BmsAutosarKnowledgeGraphNode {
-	x: number
-	y: number
-	radius: number
-}
+cytoscape.use(coseBilkent)
 
 export const TYPE_COLORS: Record<string, string> = {
 	"COMPOSITION-SW-COMPONENT-TYPE": "#4EC9B0",
@@ -42,9 +40,6 @@ const TYPE_RADIUS: Record<string, number> = {
 }
 
 const MAX_LABEL_LENGTH = 18
-const LABEL_FONT_SIZE = 9
-const LABEL_PADDING_X = 4
-const LABEL_PADDING_Y = 2
 
 function getNodeRadius(type: string): number {
 	return TYPE_RADIUS[type] ?? TYPE_RADIUS.UNKNOWN
@@ -54,209 +49,8 @@ function getNodeColor(type: string): string {
 	return TYPE_COLORS[type] ?? TYPE_COLORS.UNKNOWN
 }
 
-function groupByType(nodes: GraphNode[]): Map<string, GraphNode[]> {
-	const groups = new Map<string, GraphNode[]>()
-	for (const node of nodes) {
-		const list = groups.get(node.type) ?? []
-		list.push(node)
-		groups.set(node.type, list)
-	}
-	return groups
-}
-
-function layoutGraph(nodes: GraphNode[], edges: BmsAutosarKnowledgeGraphEdge[], width: number, height: number): void {
-	if (nodes.length === 0) return
-
-	const center = { x: width / 2, y: height / 2 }
-	const area = width * height
-	const k = Math.sqrt(area / (nodes.length + 1)) * 1.3
-	const typeGroups = groupByType(nodes)
-	const types = Array.from(typeGroups.keys())
-	const groupRingRadius = Math.min(width, height) * 0.38
-
-	const groupCenters = new Map<string, { x: number; y: number }>()
-	for (let i = 0; i < types.length; i++) {
-		const angle = (i / types.length) * 2 * Math.PI
-		groupCenters.set(types[i], {
-			x: center.x + Math.cos(angle) * groupRingRadius,
-			y: center.y + Math.sin(angle) * groupRingRadius,
-		})
-	}
-
-	// Initialize nodes near their type cluster center in a small grid.
-	for (const [type, group] of typeGroups) {
-		const gc = groupCenters.get(type) ?? center
-		const cols = Math.max(1, Math.ceil(Math.sqrt(group.length)))
-		const spacing = 32
-		for (let i = 0; i < group.length; i++) {
-			const row = Math.floor(i / cols)
-			const col = i % cols
-			group[i].x = gc.x + (col - cols / 2) * spacing
-			group[i].y = gc.y + (row - cols / 2) * spacing
-		}
-	}
-
-	const indexById = new Map<string, number>()
-	for (let i = 0; i < nodes.length; i++) {
-		indexById.set(nodes[i].id, i)
-	}
-
-	const edgePairs: Array<[number, number]> = []
-	for (const edge of edges) {
-		const s = indexById.get(edge.source)
-		const t = indexById.get(edge.target)
-		if (s !== undefined && t !== undefined) {
-			edgePairs.push([s, t])
-		}
-	}
-
-	const velocities = nodes.map(() => ({ x: 0, y: 0 }))
-	const maxIterations = Math.min(300, Math.max(100, nodes.length * 2))
-	let temperature = Math.min(width, height) / 10
-	const cooling = 0.97
-
-	const left = 40
-	const right = width - 40
-	const top = 40
-	const bottom = height - 40
-
-	for (let iter = 0; iter < maxIterations; iter++) {
-		// Repulsion
-		for (let i = 0; i < nodes.length; i++) {
-			for (let j = i + 1; j < nodes.length; j++) {
-				const a = nodes[i]
-				const b = nodes[j]
-				let dx = a.x - b.x
-				let dy = a.y - b.y
-				const dist = Math.sqrt(dx * dx + dy * dy) || 1
-				if (dist < k * 3) {
-					const force = (k * k) / dist
-					dx = (dx / dist) * force * 0.5
-					dy = (dy / dist) * force * 0.5
-					velocities[i].x += dx
-					velocities[i].y += dy
-					velocities[j].x -= dx
-					velocities[j].y -= dy
-				}
-			}
-		}
-
-		// Edge attraction
-		for (const [si, ti] of edgePairs) {
-			const source = nodes[si]
-			const target = nodes[ti]
-			let dx = target.x - source.x
-			let dy = target.y - source.y
-			const dist = Math.sqrt(dx * dx + dy * dy) || 1
-			const ideal = source.radius + target.radius + 40
-			const force = (dist - ideal) * 0.025
-			dx = (dx / dist) * force
-			dy = (dy / dist) * force
-			velocities[si].x += dx
-			velocities[si].y += dy
-			velocities[ti].x -= dx
-			velocities[ti].y -= dy
-		}
-
-		// Attraction to type cluster center
-		for (let i = 0; i < nodes.length; i++) {
-			const node = nodes[i]
-			const gc = groupCenters.get(node.type)
-			if (!gc) continue
-			velocities[i].x += (gc.x - node.x) * 0.03
-			velocities[i].y += (gc.y - node.y) * 0.03
-		}
-
-		// Weak global gravity
-		for (let i = 0; i < nodes.length; i++) {
-			const node = nodes[i]
-			velocities[i].x += (center.x - node.x) * 0.005
-			velocities[i].y += (center.y - node.y) * 0.005
-		}
-
-		// Apply velocities
-		for (let i = 0; i < nodes.length; i++) {
-			const node = nodes[i]
-			node.x += velocities[i].x * temperature
-			node.y += velocities[i].y * temperature
-			velocities[i].x *= 0.65
-			velocities[i].y *= 0.65
-		}
-
-		// Collision resolution
-		for (let pass = 0; pass < 4; pass++) {
-			for (let i = 0; i < nodes.length; i++) {
-				for (let j = i + 1; j < nodes.length; j++) {
-					const a = nodes[i]
-					const b = nodes[j]
-					let dx = a.x - b.x
-					let dy = a.y - b.y
-					const dist = Math.sqrt(dx * dx + dy * dy) || 0
-					const minDist = a.radius + b.radius + 6
-					if (dist < minDist) {
-						let nx = 0
-						let ny = 0
-						if (dist === 0) {
-							nx = 1
-							ny = 0
-						} else {
-							nx = dx / dist
-							ny = dy / dist
-						}
-						const overlap = (minDist - dist) / 2 + 1
-						a.x += nx * overlap
-						a.y += ny * overlap
-						b.x -= nx * overlap
-						b.y -= ny * overlap
-					}
-				}
-			}
-		}
-
-		// Keep inside padded bounds
-		for (const node of nodes) {
-			node.x = Math.max(left + node.radius, Math.min(right - node.radius, node.x))
-			node.y = Math.max(top + node.radius, Math.min(bottom - node.radius, node.y))
-		}
-
-		temperature *= cooling
-	}
-
-	// Final collision cleanup
-	for (let pass = 0; pass < 12; pass++) {
-		for (let i = 0; i < nodes.length; i++) {
-			for (let j = i + 1; j < nodes.length; j++) {
-				const a = nodes[i]
-				const b = nodes[j]
-				let dx = a.x - b.x
-				let dy = a.y - b.y
-				const dist = Math.sqrt(dx * dx + dy * dy) || 0
-				const minDist = a.radius + b.radius + 4
-				if (dist < minDist) {
-					let nx = 0
-					let ny = 0
-					if (dist === 0) {
-						nx = 1
-						ny = 0
-					} else {
-						nx = dx / dist
-						ny = dy / dist
-					}
-					const overlap = (minDist - dist) / 2 + 0.5
-					a.x += nx * overlap
-					a.y += ny * overlap
-					b.x -= nx * overlap
-					b.y -= ny * overlap
-				}
-			}
-		}
-	}
-
-	// Final bounds clamp
-	for (const node of nodes) {
-		node.x = Math.max(node.radius, Math.min(width - node.radius, node.x))
-		node.y = Math.max(node.radius, Math.min(height - node.radius, node.y))
-	}
+function truncateLabel(name: string): string {
+	return name.length > MAX_LABEL_LENGTH ? `${name.slice(0, MAX_LABEL_LENGTH - 1)}…` : name
 }
 
 interface BmsAutosarKnowledgeGraphRendererProps {
@@ -304,8 +98,8 @@ function generateMermaid(graph: { nodes: BmsAutosarKnowledgeGraphNode[]; edges: 
 	return lines.join("\n")
 }
 
-function downloadBlob(content: string, filename: string, type: string): void {
-	const blob = new Blob([content], { type })
+function downloadBlob(content: string | Blob, filename: string, type?: string): void {
+	const blob = content instanceof Blob ? content : new Blob([content], { type: type ?? "text/plain;charset=utf-8" })
 	const url = URL.createObjectURL(blob)
 	const a = document.createElement("a")
 	a.href = url
@@ -314,36 +108,20 @@ function downloadBlob(content: string, filename: string, type: string): void {
 	URL.revokeObjectURL(url)
 }
 
-interface Transform {
-	x: number
-	y: number
-	k: number
+function getCssVar(name: string, fallback: string): string {
+	if (typeof document === "undefined") return fallback
+	const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+	return value || fallback
 }
 
-function clamp(value: number, min: number, max: number): number {
-	return Math.max(min, Math.min(max, value))
-}
-
-function fitGraph(nodes: GraphNode[], width: number, height: number, padding = 40): Transform {
-	if (nodes.length === 0) return { x: 0, y: 0, k: 1 }
-	let minX = Infinity
-	let minY = Infinity
-	let maxX = -Infinity
-	let maxY = -Infinity
-	for (const node of nodes) {
-		minX = Math.min(minX, node.x - node.radius)
-		minY = Math.min(minY, node.y - node.radius)
-		maxX = Math.max(maxX, node.x + node.radius)
-		maxY = Math.max(maxY, node.y + node.radius)
-	}
-	const graphW = maxX - minX
-	const graphH = maxY - minY
-	if (graphW === 0 || graphH === 0) return { x: 0, y: 0, k: 1 }
-	const scale = Math.min((width - padding * 2) / graphW, (height - padding * 2) / graphH, 1.5)
-	const x = (width - (minX + maxX) * scale) / 2
-	const y = (height - (minY + maxY) * scale) / 2
-	return { x, y, k: scale }
-}
+const LAYOUT_OPTIONS: { label: string; value: string }[] = [
+	{ label: "Force (cose)", value: "cose" },
+	{ label: "Force Bilkent", value: "cose-bilkent" },
+	{ label: "Grid", value: "grid" },
+	{ label: "Circle", value: "circle" },
+	{ label: "Concentric", value: "concentric" },
+	{ label: "Hierarchical", value: "breadthfirst" },
+]
 
 export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraphRendererProps> = ({
 	nodes,
@@ -354,15 +132,15 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 	emptyMessage = "No ARXML graph data available.",
 	children,
 }) => {
-	const svgRef = useRef<SVGSVGElement>(null)
+	const containerRef = useRef<HTMLDivElement>(null)
+	const cyRef = useRef<cytoscape.Core | null>(null)
 	const [selectedNode, setSelectedNode] = useState<string | null>(null)
 	const [hoveredNode, setHoveredNode] = useState<string | null>(null)
-	const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, k: 1 })
-	const [dragging, setDragging] = useState(false)
-	const dragStartRef = useRef<{ x: number; y: number } | null>(null)
-	const { showNotice, noticeElement } = useBmsAutosarNotice(2000)
 	const [searchTerm, setSearchTerm] = useState("")
 	const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set())
+	const [layoutName, setLayoutName] = useState("cose-bilkent")
+	const [layoutRunning, setLayoutRunning] = useState(false)
+	const { showNotice, noticeElement } = useBmsAutosarNotice(2000)
 
 	const filteredNodes = useMemo(() => {
 		const term = searchTerm.trim().toLowerCase()
@@ -384,73 +162,191 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		[edges, filteredNodeIds],
 	)
 
-	const layoutedNodes = useMemo(() => {
-		if (filteredNodes.length === 0) return []
-		const graphNodes = filteredNodes.map((n) => ({ ...n, x: 0, y: 0, radius: getNodeRadius(n.type) }))
-		layoutGraph(graphNodes, filteredEdges, width, height)
-		return graphNodes
-	}, [filteredNodes, filteredEdges, width, height])
+	const typeCounts = useMemo(() => {
+		const counts = new Map<string, number>()
+		for (const node of nodes) {
+			counts.set(node.type, (counts.get(node.type) ?? 0) + 1)
+		}
+		return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
+	}, [nodes])
 
-	// Auto-fit when the graph changes.
+	const textColor = useMemo(() => getCssVar("--vscode-foreground", "#cccccc"), [])
+	const selectedColor = useMemo(() => getCssVar("--vscode-button-background", "#0e639c"), [])
+	const edgeColor = useMemo(() => getCssVar("--vscode-panel-border", "#666666"), [])
+	const bgColor = useMemo(() => getCssVar("--vscode-editor-background", "#1e1e1e"), [])
+
+	// Initialize Cytoscape instance once.
 	useEffect(() => {
-		setTransform(fitGraph(layoutedNodes, width, height))
-		setSelectedNode(null)
-	}, [layoutedNodes, width, height])
+		if (!containerRef.current) return
+		const cy = cytoscape({
+			container: containerRef.current,
+			minZoom: 0.05,
+			maxZoom: 4,
+			wheelSensitivity: 0.25,
+			style: [
+				{
+					selector: "node",
+					style: {
+						"background-color": (node: cytoscape.NodeSingular) => node.data("color") as string,
+						width: (node: cytoscape.NodeSingular) => node.data("size") as number,
+						height: (node: cytoscape.NodeSingular) => node.data("size") as number,
+						label: (node: cytoscape.NodeSingular) => node.data("label") as string,
+						color: textColor,
+						"font-size": "10px",
+						"text-valign": "bottom",
+						"text-halign": "center",
+						"text-margin-y": 4,
+						"text-background-color": bgColor,
+						"text-background-opacity": 0.85,
+						"text-background-padding": "2px",
+						"text-background-shape": "roundrectangle",
+						"border-width": 1,
+						"border-color": "rgba(0,0,0,0.25)",
+						"transition-property": "border-width, border-color",
+						"transition-duration": 150,
+					},
+				},
+				{
+					selector: "node:selected",
+					style: {
+						"border-width": 4,
+						"border-color": selectedColor,
+						"z-index": 999,
+					},
+				},
+				{
+					selector: "edge",
+					style: {
+						width: 1,
+						"line-color": edgeColor,
+						"target-arrow-color": edgeColor,
+						"target-arrow-shape": "triangle",
+						"arrow-scale": 0.8,
+						"curve-style": "bezier",
+						opacity: 0.55,
+					},
+				},
+				{
+					selector: "edge:selected",
+					style: {
+						width: 2,
+						"line-color": selectedColor,
+						"target-arrow-color": selectedColor,
+						opacity: 1,
+					},
+				},
+			],
+		})
 
-	const handleZoom = (scaleFactor: number, centerX?: number, centerY?: number) => {
-		setTransform((prev) => {
-			const newK = clamp(prev.k * scaleFactor, 0.1, 5)
-			if (newK === prev.k) return prev
-			const cx = centerX ?? width / 2
-			const cy = centerY ?? height / 2
-			const wx = (cx - prev.x) / prev.k
-			const wy = (cy - prev.y) / prev.k
-			return {
-				k: newK,
-				x: cx - wx * newK,
-				y: cy - wy * newK,
-			}
+		cy.on("tap", "node", (evt) => {
+			const id = evt.target.id()
+			setSelectedNode((prev) => (prev === id ? null : id))
+		})
+		cy.on("tap", (evt) => {
+			if (evt.target === cy) setSelectedNode(null)
+		})
+		cy.on("mouseover", "node", (evt) => setHoveredNode(evt.target.id()))
+		cy.on("mouseout", "node", () => setHoveredNode(null))
+
+		cyRef.current = cy
+		return () => {
+			cy.destroy()
+			cyRef.current = null
+		}
+	}, [textColor, selectedColor, edgeColor, bgColor])
+
+	// Update elements whenever the graph data changes.
+	useEffect(() => {
+		const cy = cyRef.current
+		if (!cy) return
+
+		cy.elements().remove()
+		if (filteredNodes.length === 0) return
+
+		const cyNodes = filteredNodes.map((node) => ({
+			data: {
+				id: node.id,
+				label: truncateLabel(node.name),
+				fullLabel: node.name,
+				type: node.type,
+				path: node.path,
+				color: getNodeColor(node.type),
+				size: getNodeRadius(node.type) * 2,
+			},
+		}))
+
+		const cyEdges = filteredEdges.map((edge, index) => ({
+			data: {
+				id: `${edge.source}->${edge.target}-${index}`,
+				source: edge.source,
+				target: edge.target,
+				relation: edge.relation,
+			},
+		}))
+
+		cy.add([...cyNodes, ...cyEdges])
+
+		if (selectedNode && filteredNodeIds.has(selectedNode)) {
+			cy.getElementById(selectedNode).select()
+		} else {
+			setSelectedNode(null)
+		}
+
+		setLayoutRunning(true)
+		let layout: cytoscape.Layouts
+		if (layoutName === "cose-bilkent") {
+			layout = cy.layout({
+				name: "cose-bilkent",
+				animate: false,
+				randomize: true,
+				componentSpacing: 80,
+				nodeRepulsion: 400000,
+				edgeElasticity: 0.45,
+				nestingFactor: 0.1,
+				gravity: 0.25,
+				numIter: 2500,
+				tile: true,
+				tilingPaddingVertical: 12,
+				tilingPaddingHorizontal: 12,
+				gravityRangeCompound: 1.5,
+				gravityCompound: 1.0,
+				gravityRange: 3.8,
+				idealEdgeLength: 70,
+			} as cytoscape.LayoutOptions)
+		} else {
+			layout = cy.layout({ name: layoutName } as cytoscape.LayoutOptions)
+		}
+
+		layout.one("layoutstop", () => {
+			cy.fit(undefined, 40)
+			setLayoutRunning(false)
+		})
+		layout.run()
+	}, [filteredNodes, filteredEdges, filteredNodeIds, layoutName, selectedNode, textColor])
+
+	// Resize when dimensions change.
+	useEffect(() => {
+		cyRef.current?.resize()
+	}, [width, height])
+
+	const toggleType = (type: string) => {
+		setHiddenTypes((prev) => {
+			const next = new Set(prev)
+			if (next.has(type)) next.delete(type)
+			else next.add(type)
+			return next
 		})
 	}
 
-	const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
-		event.preventDefault()
-		const svg = svgRef.current
-		if (!svg) return
-		const point = svg.createSVGPoint()
-		point.x = event.clientX
-		point.y = event.clientY
-		const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse())
-		const scaleFactor = event.deltaY < 0 ? 1.15 : 0.87
-		handleZoom(scaleFactor, svgPoint.x, svgPoint.y)
-	}
+	const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.2)
+	const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() * 0.83)
+	const handleFit = () => cyRef.current?.fit(undefined, 40)
 
-	const handleMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
-		if (event.button !== 0) return
-		setDragging(true)
-		dragStartRef.current = { x: event.clientX - transform.x, y: event.clientY - transform.y }
-	}
-
-	const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
-		if (!dragging || !dragStartRef.current) return
-		setTransform((prev) => ({
-			...prev,
-			x: event.clientX - dragStartRef.current!.x,
-			y: event.clientY - dragStartRef.current!.y,
-		}))
-	}
-
-	const handleMouseUp = () => {
-		setDragging(false)
-		dragStartRef.current = null
-	}
-
-	const handleExportSvg = () => {
-		const svg = svgRef.current
-		if (!svg) return
-		const serializer = new XMLSerializer()
-		const source = serializer.serializeToString(svg)
-		downloadBlob(source, "arxml-knowledge-graph.svg", "image/svg+xml;charset=utf-8")
+	const handleExportPng = () => {
+		const cy = cyRef.current
+		if (!cy) return
+		const png = cy.png({ full: true, bg: bgColor, scale: 2 })
+		downloadBlob(png, "arxml-knowledge-graph.png", "image/png")
 	}
 
 	const handleExportMermaid = async () => {
@@ -463,26 +359,10 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		}
 	}
 
-	const resetView = () => setTransform(fitGraph(layoutedNodes, width, height))
-
-	const typeCounts = useMemo(() => {
-		const counts = new Map<string, number>()
-		for (const node of nodes) {
-			counts.set(node.type, (counts.get(node.type) ?? 0) + 1)
-		}
-		return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
-	}, [nodes])
-
-	const toggleType = (type: string) => {
-		setHiddenTypes((prev) => {
-			const next = new Set(prev)
-			if (next.has(type)) next.delete(type)
-			else next.add(type)
-			return next
-		})
-	}
-
-	const showAllLabels = layoutedNodes.length <= 35 || transform.k > 1.2
+	const selectedPath = useMemo(
+		() => filteredNodes.find((n) => n.id === selectedNode)?.path,
+		[filteredNodes, selectedNode],
+	)
 
 	return (
 		<div className="flex flex-col h-full">
@@ -497,30 +377,36 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 					value={searchTerm}
 					onChange={(e) => setSearchTerm(e.target.value)}
 				/>
+				<select
+					className="text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
+					value={layoutName}
+					onChange={(e) => setLayoutName(e.target.value)}>
+					{LAYOUT_OPTIONS.map((opt) => (
+						<option key={opt.value} value={opt.value}>
+							{opt.label}
+						</option>
+					))}
+				</select>
 				<button
-					className={`text-xs px-2 py-1 rounded border ${
-						selectedNode === null
-							? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-transparent"
-							: "bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
-					}`}
+					className="text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
 					onClick={() => setSelectedNode(null)}
 					type="button">
-					All edges
+					Clear selection
 				</button>
-				<VSCodeButton appearance="secondary" disabled={layoutedNodes.length === 0} onClick={() => handleZoom(1.2)}>
+				<VSCodeButton appearance="secondary" disabled={filteredNodes.length === 0} onClick={handleZoomIn}>
 					<i className="codicon codicon-zoom-in" style={{ fontSize: "12.5px" }} />
 				</VSCodeButton>
-				<VSCodeButton appearance="secondary" disabled={layoutedNodes.length === 0} onClick={() => handleZoom(0.83)}>
+				<VSCodeButton appearance="secondary" disabled={filteredNodes.length === 0} onClick={handleZoomOut}>
 					<i className="codicon codicon-zoom-out" style={{ fontSize: "12.5px" }} />
 				</VSCodeButton>
-				<VSCodeButton appearance="secondary" disabled={layoutedNodes.length === 0} onClick={resetView}>
+				<VSCodeButton appearance="secondary" disabled={filteredNodes.length === 0} onClick={handleFit}>
 					<i className="codicon codicon-screen-normal" style={{ fontSize: "12.5px" }} />
 				</VSCodeButton>
 				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={handleExportMermaid}>
 					Export Mermaid
 				</VSCodeButton>
-				<VSCodeButton appearance="secondary" disabled={layoutedNodes.length === 0} onClick={handleExportSvg}>
-					Export SVG
+				<VSCodeButton appearance="secondary" disabled={filteredNodes.length === 0} onClick={handleExportPng}>
+					Export PNG
 				</VSCodeButton>
 			</div>
 
@@ -554,120 +440,31 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 			)}
 
 			<div
-				className="flex-1 border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] overflow-hidden"
+				className="flex-1 border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] overflow-hidden relative"
 				style={{ minHeight: height }}>
-				{loading ? (
-					<div className="text-sm text-description py-4 text-center">Building graph...</div>
-				) : layoutedNodes.length === 0 ? (
-					<div className="text-sm text-description py-4 text-center">{emptyMessage}</div>
-				) : (
-					<svg
-						aria-label="ARXML knowledge graph"
-						className={dragging ? "cursor-grabbing" : "cursor-grab"}
-						height={height}
-						onMouseDown={handleMouseDown}
-						onMouseLeave={handleMouseUp}
-						onMouseMove={handleMouseMove}
-						onMouseUp={handleMouseUp}
-						onWheel={handleWheel}
-						ref={svgRef}
-						role="img"
-						width={width}>
-						<title>ARXML knowledge graph</title>
-						<defs>
-							<marker id="arrowhead" markerHeight="7" markerWidth="10" orient="auto" refX="20" refY="3.5">
-								<polygon fill="var(--vscode-panel-border)" points="0 0, 10 3.5, 0 7" />
-							</marker>
-						</defs>
-						<g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
-							{filteredEdges.map((edge, i) => {
-								const source = layoutedNodes.find((n) => n.id === edge.source)
-								const target = layoutedNodes.find((n) => n.id === edge.target)
-								if (!source || !target) return null
-								const isSelected = selectedNode && (edge.source === selectedNode || edge.target === selectedNode)
-								const opacity = selectedNode ? (isSelected ? 1 : 0.15) : 0.5
-								return (
-									<line
-										key={`${edge.source}-${edge.target}-${i}`}
-										markerEnd="url(#arrowhead)"
-										opacity={opacity}
-										stroke="var(--vscode-panel-border)"
-										strokeWidth={isSelected ? 2 : 1}
-										x1={source.x}
-										x2={target.x}
-										y1={source.y}
-										y2={target.y}
-									/>
-								)
-							})}
-							{layoutedNodes.map((node) => {
-								const isSelected = selectedNode === node.id
-								const isHovered = hoveredNode === node.id
-								const showLabel = showAllLabels || isSelected || isHovered
-								const label =
-									node.name.length > MAX_LABEL_LENGTH ? `${node.name.slice(0, MAX_LABEL_LENGTH - 1)}…` : node.name
-								const labelWidth = label.length * 5.6 + LABEL_PADDING_X * 2
-								const labelHeight = LABEL_FONT_SIZE + LABEL_PADDING_Y * 2
-								const dimmed = selectedNode && !isSelected && !isHovered
-								return (
-									// biome-ignore lint/a11y/useSemanticElements: SVG node group cannot be a <button>
-									<g
-										aria-label={`${node.type} ${node.name}`}
-										className="cursor-pointer"
-										key={node.id}
-										opacity={dimmed ? 0.35 : 1}
-										role="button"
-										tabIndex={0}
-										transform={`translate(${node.x}, ${node.y})`}
-										onClick={() => setSelectedNode(isSelected ? null : node.id)}
-										onKeyDown={(event) => {
-											if (event.key === "Enter" || event.key === " ") {
-												setSelectedNode(isSelected ? null : node.id)
-											}
-										}}
-										onMouseEnter={() => setHoveredNode(node.id)}
-										onMouseLeave={() => setHoveredNode((prev) => (prev === node.id ? null : prev))}>
-										<circle
-											fill={getNodeColor(node.type)}
-											r={node.radius}
-											stroke={isSelected ? "var(--vscode-button-background)" : "rgba(0,0,0,0.2)"}
-											strokeWidth={isSelected ? 3 : 1}
-										/>
-										{showLabel && (
-											<g transform={`translate(0, ${node.radius + 10})`}>
-												<rect
-													height={labelHeight}
-													fill="var(--vscode-editor-background)"
-													opacity={0.85}
-													rx={3}
-													width={labelWidth}
-													x={-labelWidth / 2}
-													y={-labelHeight / 2}
-												/>
-												<text
-													className="fill-[var(--vscode-foreground)] pointer-events-none"
-													style={{
-														fontFamily: "var(--vscode-font-family)",
-														fontSize: `${LABEL_FONT_SIZE}px`,
-													}}
-													textAnchor="middle"
-													dy="0.35em">
-													{label}
-												</text>
-											</g>
-										)}
-										<title>{`${node.type}: ${node.path}`}</title>
-									</g>
-								)
-							})}
-						</g>
-					</svg>
+				{loading || layoutRunning ? (
+					<div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--vscode-descriptionForeground)]">
+						Building graph...
+					</div>
+				) : filteredNodes.length === 0 ? (
+					<div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--vscode-descriptionForeground)]">
+						{emptyMessage}
+					</div>
+				) : null}
+				<div
+					ref={containerRef}
+					className="w-full h-full"
+					style={{ width: "100%", height: "100%", visibility: loading || layoutRunning ? "hidden" : "visible" }}
+				/>
+				{hoveredNode && (
+					<div className="absolute bottom-2 left-2 text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] border-[var(--vscode-panel-border)]">
+						{filteredNodes.find((n) => n.id === hoveredNode)?.path}
+					</div>
 				)}
 			</div>
-			{selectedNode && (
-				<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)]">
-					Selected: {layoutedNodes.find((n) => n.id === selectedNode)?.path}
-				</div>
+
+			{selectedPath && (
+				<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)] truncate">Selected: {selectedPath}</div>
 			)}
 			{noticeElement}
 		</div>
