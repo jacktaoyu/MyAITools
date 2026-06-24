@@ -16,6 +16,9 @@ service FileService {
   // Opens a file in the editor
   rpc openFile(StringRequest) returns (Empty);
 
+  // Opens an ARXML source file and jumps to a specific line.
+  rpc openArxmlSource(OpenArxmlSourceRequest) returns (Empty);
+
   // Opens an image in the system viewer
   rpc openImage(StringRequest) returns (Empty);
 
@@ -123,6 +126,15 @@ service FileService {
 
   // Builds an ARXML knowledge graph from the given ARXML file paths.
   rpc getBmsAutosarKnowledgeGraph(BmsAutosarKnowledgeGraphRequest) returns (BmsAutosarKnowledgeGraph);
+
+  // Parses a CAN DBC file into external graph nodes.
+  rpc parseBmsAutosarDbc(StringRequest) returns (BmsAutosarExternalGraph);
+
+  // Parses an Excel interface/parameter file into external graph nodes.
+  rpc parseBmsAutosarExcel(StringRequest) returns (BmsAutosarExternalGraph);
+
+  // Parses Simulink data dictionary (.m) files into external graph nodes.
+  rpc parseBmsAutosarSimulinkData(StringRequest) returns (BmsAutosarExternalGraph);
 
   // Automatically fixes BMS AUTOSAR generated code using the configured LLM
   // based on the latest quality/MISRA report. Set apply=true to write the fix
@@ -547,6 +559,15 @@ message BmsAutosarKnowledgeGraphNode {
   string name = 3;
   string path = 4;
   string package_path = 5;
+  string source_file = 6;
+  int32 line = 7;
+}
+
+// Request to open an ARXML source file at a specific line.
+message OpenArxmlSourceRequest {
+  Metadata metadata = 1;
+  string file_path = 2;
+  int32 line = 3;
 }
 
 // An edge in the ARXML knowledge graph.
@@ -560,6 +581,28 @@ message BmsAutosarKnowledgeGraphEdge {
 message BmsAutosarKnowledgeGraph {
   repeated BmsAutosarKnowledgeGraphNode nodes = 1;
   repeated BmsAutosarKnowledgeGraphEdge edges = 2;
+}
+
+// A node representing an external asset (DBC signal, Excel row, Simulink data type).
+message BmsAutosarExternalNode {
+  string id = 1;
+  string type = 2;
+  string name = 3;
+  string source_file = 4;
+  string metadata = 5;
+}
+
+// An edge connecting an external node to an ARXML node.
+message BmsAutosarExternalEdge {
+  string source = 1;
+  string target = 2;
+  string relation = 3;
+}
+
+// Response containing external graph data.
+message BmsAutosarExternalGraph {
+  repeated BmsAutosarExternalNode nodes = 1;
+  repeated BmsAutosarExternalEdge edges = 2;
 }
 
 // Request to auto-fix a BMS AUTOSAR generated file using the configured LLM.

@@ -1,11 +1,21 @@
-import { BmsAutosarKnowledgeGraphEdge, BmsAutosarKnowledgeGraphNode } from "@shared/proto/cline/file"
+import {
+	BmsAutosarExternalEdge,
+	BmsAutosarExternalNode,
+	BmsAutosarKnowledgeGraphEdge,
+	BmsAutosarKnowledgeGraphNode,
+	OpenArxmlSourceRequest,
+} from "@shared/proto/cline/file"
+import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import cytoscape from "cytoscape"
 import coseBilkent from "cytoscape-cose-bilkent"
+import dagre from "cytoscape-dagre"
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import { FileServiceClient } from "@/services/grpc-client"
 import { useBmsAutosarNotice } from "./useBmsAutosarNotice"
 
 cytoscape.use(coseBilkent)
+cytoscape.use(dagre)
 
 export const TYPE_COLORS: Record<string, string> = {
 	"COMPOSITION-SW-COMPONENT-TYPE": "#4EC9B0",
@@ -20,6 +30,10 @@ export const TYPE_COLORS: Record<string, string> = {
 	"RUNNABLE-ENTITY": "#C586C0",
 	"DATA-PROTOTYPE": "#DCDCAA",
 	"AR-PACKAGE": "#808080",
+	"CAN-SIGNAL": "#FFA500",
+	"EXCEL-INTERFACE": "#9C89B8",
+	"EXCEL-PARAMETER": "#B28DFF",
+	"SIMULINK-DATA": "#FF69B4",
 	UNKNOWN: "#808080",
 }
 
@@ -36,7 +50,20 @@ const TYPE_RADIUS: Record<string, number> = {
 	"DATA-PROTOTYPE": 10,
 	"IMPLEMENTATION-DATA-TYPE": 10,
 	"APPLICATION-PRIMITIVE-DATA-TYPE": 10,
+	"CAN-SIGNAL": 11,
+	"EXCEL-INTERFACE": 11,
+	"EXCEL-PARAMETER": 11,
+	"SIMULINK-DATA": 11,
 	UNKNOWN: 12,
+}
+
+const RELATION_COLORS: Record<string, string> = {
+	contains: "#6e6e6e",
+	provides: "#4EC9B0",
+	requires: "#9CDCFE",
+	implements: "#CE9178",
+	references: "#DCDCAA",
+	triggers: "#C586C0",
 }
 
 const MAX_LABEL_LENGTH = 18
@@ -117,11 +144,63 @@ function getCssVar(name: string, fallback: string): string {
 const LAYOUT_OPTIONS: { label: string; value: string }[] = [
 	{ label: "Force (cose)", value: "cose" },
 	{ label: "Force Bilkent", value: "cose-bilkent" },
+	{ label: "Hierarchical (dagre)", value: "dagre" },
 	{ label: "Grid", value: "grid" },
 	{ label: "Circle", value: "circle" },
 	{ label: "Concentric", value: "concentric" },
-	{ label: "Hierarchical", value: "breadthfirst" },
+	{ label: "Breadthfirst", value: "breadthfirst" },
 ]
+
+function parentPackageId(packagePath: string): string | undefined {
+	const parts = packagePath.split("/").filter(Boolean)
+	if (parts.length <= 1) return undefined
+	return `AR-PACKAGE:${parts.slice(0, -1).join("/")}`
+}
+
+function buildCytoscapeElements(
+	nodes: Array<BmsAutosarKnowledgeGraphNode | BmsAutosarExternalNode>,
+	edges: Array<BmsAutosarKnowledgeGraphEdge | BmsAutosarExternalEdge>,
+) {
+	const nodeIdSet = new Set(nodes.map((n) => n.id))
+	const nodeEles = nodes.map((node) => {
+		let parentId: string | undefined
+		const packagePath = "packagePath" in node ? node.packagePath : undefined
+		if (node.type === "AR-PACKAGE" && packagePath) {
+			parentId = parentPackageId(packagePath)
+		} else if (packagePath) {
+			parentId = `AR-PACKAGE:${packagePath}`
+		}
+		if (parentId && !nodeIdSet.has(parentId)) {
+			parentId = undefined
+		}
+		const isExternal = !("packagePath" in node)
+		return {
+			data: {
+				id: node.id,
+				parent: parentId,
+				name: node.name,
+				label: truncateLabel(node.name),
+				fullLabel: node.name,
+				type: node.type,
+				color: getNodeColor(node.type),
+				size: getNodeRadius(node.type) * 2,
+				metadata: isExternal ? (node as BmsAutosarExternalNode).metadata : undefined,
+				sourceFile: isExternal ? (node as BmsAutosarExternalNode).sourceFile : (node as BmsAutosarKnowledgeGraphNode).sourceFile,
+				line: isExternal ? undefined : (node as BmsAutosarKnowledgeGraphNode).line,
+			},
+		}
+	})
+	const edgeEles = edges.map((edge, index) => ({
+		data: {
+			id: `${edge.source}->${edge.target}-${index}`,
+			source: edge.source,
+			target: edge.target,
+			relation: edge.relation,
+			external: !("source" in edge && typeof edge.source === "string" && edge.source.startsWith("AR-PACKAGE:")),
+		},
+	}))
+	return [...nodeEles, ...edgeEles]
+}
 
 export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraphRendererProps> = ({
 	nodes,
@@ -138,37 +217,63 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 	const [hoveredNode, setHoveredNode] = useState<string | null>(null)
 	const [searchTerm, setSearchTerm] = useState("")
 	const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set())
+	const [hiddenRelations, setHiddenRelations] = useState<Set<string>>(new Set())
 	const [layoutName, setLayoutName] = useState("cose-bilkent")
 	const [layoutRunning, setLayoutRunning] = useState(false)
+	const [externalNodes, setExternalNodes] = useState<BmsAutosarExternalNode[]>([])
+	const [externalEdges, setExternalEdges] = useState<BmsAutosarExternalEdge[]>([])
 	const { showNotice, noticeElement } = useBmsAutosarNotice(2000)
+
+	const allNodes = useMemo<Array<BmsAutosarKnowledgeGraphNode | BmsAutosarExternalNode>>(
+		() => [...nodes, ...externalNodes],
+		[nodes, externalNodes],
+	)
+	const allEdges = useMemo<Array<BmsAutosarKnowledgeGraphEdge | BmsAutosarExternalEdge>>(
+		() => [...edges, ...externalEdges],
+		[edges, externalEdges],
+	)
 
 	const filteredNodes = useMemo(() => {
 		const term = searchTerm.trim().toLowerCase()
-		return nodes.filter((n) => {
+		return allNodes.filter((n) => {
 			if (hiddenTypes.has(n.type)) return false
 			if (!term) return true
 			return (
 				n.name.toLowerCase().includes(term) ||
-				n.path.toLowerCase().includes(term) ||
+				("path" in n && n.path.toLowerCase().includes(term)) ||
 				n.id.toLowerCase().includes(term) ||
 				n.type.toLowerCase().includes(term)
 			)
 		})
-	}, [nodes, hiddenTypes, searchTerm])
+	}, [allNodes, hiddenTypes, searchTerm])
 
 	const filteredNodeIds = useMemo(() => new Set(filteredNodes.map((n) => n.id)), [filteredNodes])
 	const filteredEdges = useMemo(
-		() => edges.filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)),
-		[edges, filteredNodeIds],
+		() =>
+			allEdges.filter(
+				(e) =>
+					filteredNodeIds.has(e.source) &&
+					filteredNodeIds.has(e.target) &&
+					!hiddenRelations.has(e.relation),
+			),
+		[allEdges, filteredNodeIds, hiddenRelations],
 	)
 
 	const typeCounts = useMemo(() => {
 		const counts = new Map<string, number>()
-		for (const node of nodes) {
+		for (const node of allNodes) {
 			counts.set(node.type, (counts.get(node.type) ?? 0) + 1)
 		}
 		return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
-	}, [nodes])
+	}, [allNodes])
+
+	const relationCounts = useMemo(() => {
+		const counts = new Map<string, number>()
+		for (const edge of allEdges) {
+			counts.set(edge.relation, (counts.get(edge.relation) ?? 0) + 1)
+		}
+		return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
+	}, [allEdges])
 
 	const textColor = useMemo(() => getCssVar("--vscode-foreground", "#cccccc"), [])
 	const selectedColor = useMemo(() => getCssVar("--vscode-button-background", "#0e639c"), [])
@@ -207,6 +312,23 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 					},
 				},
 				{
+					selector: ":parent",
+					style: {
+						"background-opacity": 0.04,
+						"background-color": edgeColor,
+						"border-width": 1,
+						"border-color": edgeColor,
+						"border-opacity": 0.5,
+						padding: "12px",
+						label: "data(name)",
+						color: textColor,
+						"font-size": "10px",
+						"text-valign": "top",
+						"text-halign": "center",
+						"text-margin-y": 4,
+					},
+				},
+				{
 					selector: "node:selected",
 					style: {
 						"border-width": 4,
@@ -218,8 +340,9 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 					selector: "edge",
 					style: {
 						width: 1,
-						"line-color": edgeColor,
-						"target-arrow-color": edgeColor,
+						"line-color": (edge: cytoscape.EdgeSingular) => RELATION_COLORS[edge.data("relation")] || edgeColor,
+						"target-arrow-color": (edge: cytoscape.EdgeSingular) =>
+							RELATION_COLORS[edge.data("relation")] || edgeColor,
 						"target-arrow-shape": "triangle",
 						"arrow-scale": 0.8,
 						"curve-style": "bezier",
@@ -245,6 +368,17 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		cy.on("tap", (evt) => {
 			if (evt.target === cy) setSelectedNode(null)
 		})
+		cy.on("dbltap", "node", async (evt) => {
+			const sourceFile = evt.target.data("sourceFile") as string | undefined
+			const line = (evt.target.data("line") as number | undefined) ?? 1
+			if (sourceFile && line > 0) {
+				try {
+					await FileServiceClient.openArxmlSource(OpenArxmlSourceRequest.create({ filePath: sourceFile, line }))
+				} catch (error) {
+					console.error("Failed to open ARXML source:", error)
+				}
+			}
+		})
 		cy.on("mouseover", "node", (evt) => setHoveredNode(evt.target.id()))
 		cy.on("mouseout", "node", () => setHoveredNode(null))
 
@@ -263,28 +397,8 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		cy.elements().remove()
 		if (filteredNodes.length === 0) return
 
-		const cyNodes = filteredNodes.map((node) => ({
-			data: {
-				id: node.id,
-				label: truncateLabel(node.name),
-				fullLabel: node.name,
-				type: node.type,
-				path: node.path,
-				color: getNodeColor(node.type),
-				size: getNodeRadius(node.type) * 2,
-			},
-		}))
-
-		const cyEdges = filteredEdges.map((edge, index) => ({
-			data: {
-				id: `${edge.source}->${edge.target}-${index}`,
-				source: edge.source,
-				target: edge.target,
-				relation: edge.relation,
-			},
-		}))
-
-		cy.add([...cyNodes, ...cyEdges])
+		const elements = buildCytoscapeElements(filteredNodes, filteredEdges)
+		cy.add(elements)
 
 		if (selectedNode && filteredNodeIds.has(selectedNode)) {
 			cy.getElementById(selectedNode).select()
@@ -313,6 +427,16 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				gravityRange: 3.8,
 				idealEdgeLength: 70,
 			} as cytoscape.LayoutOptions)
+		} else if (layoutName === "dagre") {
+			layout = cy.layout({
+				name: "dagre",
+				animate: false,
+				rankDir: "LR",
+				nodeSep: 50,
+				edgeSep: 12,
+				rankSep: 90,
+				padding: 20,
+			} as cytoscape.LayoutOptions)
 		} else {
 			layout = cy.layout({ name: layoutName } as cytoscape.LayoutOptions)
 		}
@@ -338,6 +462,15 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		})
 	}
 
+	const toggleRelation = (relation: string) => {
+		setHiddenRelations((prev) => {
+			const next = new Set(prev)
+			if (next.has(relation)) next.delete(relation)
+			else next.add(relation)
+			return next
+		})
+	}
+
 	const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.2)
 	const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() * 0.83)
 	const handleFit = () => cyRef.current?.fit(undefined, 40)
@@ -359,10 +492,85 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		}
 	}
 
-	const selectedPath = useMemo(
-		() => filteredNodes.find((n) => n.id === selectedNode)?.path,
+	const autoLinkExternalNodes = (
+		newExternalNodes: BmsAutosarExternalNode[],
+		arxmlNodes: BmsAutosarKnowledgeGraphNode[],
+	): BmsAutosarExternalEdge[] => {
+		const arxmlByName = new Map<string, BmsAutosarKnowledgeGraphNode[]>()
+		for (const node of arxmlNodes) {
+			const key = node.name.toLowerCase()
+			const list = arxmlByName.get(key) ?? []
+			list.push(node)
+			arxmlByName.set(key, list)
+		}
+
+		const newEdges: BmsAutosarExternalEdge[] = []
+		for (const ext of newExternalNodes) {
+			const candidates = arxmlByName.get(ext.name.toLowerCase())
+			if (!candidates) continue
+			for (const target of candidates.slice(0, 3)) {
+				newEdges.push(
+					BmsAutosarExternalEdge.create({
+						source: ext.id,
+						target: target.id,
+						relation: "references",
+					}),
+				)
+			}
+		}
+		return newEdges
+	}
+
+	const loadExternalSource = async (parser: "dbc" | "excel" | "simulink") => {
+		try {
+			const picker = await FileServiceClient.selectFiles(BooleanRequest.create({ value: false }))
+			const paths = picker.values2 ?? []
+			if (paths.length === 0) return
+
+			const filePath = paths[0]
+			let response: { nodes: BmsAutosarExternalNode[]; edges: BmsAutosarExternalEdge[] }
+			if (parser === "dbc") {
+				response = await FileServiceClient.parseBmsAutosarDbc(StringRequest.create({ value: filePath }))
+			} else if (parser === "excel") {
+				response = await FileServiceClient.parseBmsAutosarExcel(StringRequest.create({ value: filePath }))
+			} else {
+				response = await FileServiceClient.parseBmsAutosarSimulinkData(StringRequest.create({ value: filePath }))
+			}
+
+			const newNodes = response.nodes
+			const newEdges = autoLinkExternalNodes(newNodes, nodes)
+			setExternalNodes((prev) => [...prev, ...newNodes])
+			setExternalEdges((prev) => [...prev, ...newEdges])
+			showNotice(`Linked ${newNodes.length} ${parser} nodes.`, "success")
+		} catch (error) {
+			console.error(`Failed to load ${parser}:`, error)
+			showNotice(`Failed to load ${parser} data.`, "error")
+		}
+	}
+
+	const clearExternal = () => {
+		setExternalNodes([])
+		setExternalEdges([])
+	}
+
+	const selectedNodeData = useMemo(
+		() => filteredNodes.find((n) => n.id === selectedNode),
 		[filteredNodes, selectedNode],
 	)
+
+	const breadcrumbParts = useMemo(() => {
+		if (!selectedNodeData || !("packagePath" in selectedNodeData)) return []
+		return selectedNodeData.packagePath.split("/").filter(Boolean)
+	}, [selectedNodeData])
+
+	const selectPackage = (packagePath: string) => {
+		const id = `AR-PACKAGE:${packagePath}`
+		if (filteredNodeIds.has(id)) {
+			setSelectedNode(id)
+			cyRef.current?.getElementById(id).select()
+			cyRef.current?.fit(cyRef.current.getElementById(id), 20)
+		}
+	}
 
 	return (
 		<div className="flex flex-col h-full">
@@ -402,6 +610,20 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				<VSCodeButton appearance="secondary" disabled={filteredNodes.length === 0} onClick={handleFit}>
 					<i className="codicon codicon-screen-normal" style={{ fontSize: "12.5px" }} />
 				</VSCodeButton>
+				<VSCodeButton appearance="secondary" onClick={() => loadExternalSource("dbc")}>
+					Link DBC
+				</VSCodeButton>
+				<VSCodeButton appearance="secondary" onClick={() => loadExternalSource("excel")}>
+					Link Excel
+				</VSCodeButton>
+				<VSCodeButton appearance="secondary" onClick={() => loadExternalSource("simulink")}>
+					Link Simulink
+				</VSCodeButton>
+				{externalNodes.length > 0 && (
+					<VSCodeButton appearance="icon" aria-label="Clear external data" onClick={clearExternal}>
+						<i className="codicon codicon-clear-all" style={{ fontSize: "12.5px" }} />
+					</VSCodeButton>
+				)}
 				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={handleExportMermaid}>
 					Export Mermaid
 				</VSCodeButton>
@@ -439,6 +661,35 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				</div>
 			)}
 
+			{relationCounts.length > 0 && (
+				<div className="flex flex-wrap gap-2 mb-2">
+					{relationCounts.map(([relation, count]) => {
+						const hidden = hiddenRelations.has(relation)
+						return (
+							<button
+								key={relation}
+								className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-opacity ${
+									hidden ? "opacity-40" : "opacity-100"
+								}`}
+								style={{
+									backgroundColor: "var(--vscode-editor-background)",
+									borderColor: "var(--vscode-panel-border)",
+									color: "var(--vscode-foreground)",
+								}}
+								onClick={() => toggleRelation(relation)}
+								type="button">
+								<span
+									className="inline-block rounded-full"
+									style={{ width: 10, height: 10, backgroundColor: RELATION_COLORS[relation] || edgeColor }}
+								/>
+								<span className={hidden ? "line-through" : undefined}>{relation}</span>
+								<span className="text-[var(--vscode-descriptionForeground)]">({count})</span>
+							</button>
+						)
+					})}
+				</div>
+			)}
+
 			<div
 				className="flex-1 border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] overflow-hidden relative"
 				style={{ minHeight: height }}>
@@ -457,14 +708,55 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 					style={{ width: "100%", height: "100%", visibility: loading || layoutRunning ? "hidden" : "visible" }}
 				/>
 				{hoveredNode && (
-					<div className="absolute bottom-2 left-2 text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] border-[var(--vscode-panel-border)]">
-						{filteredNodes.find((n) => n.id === hoveredNode)?.path}
+					<div className="absolute bottom-2 left-2 text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] border-[var(--vscode-panel-border)] max-w-md truncate">
+						{(() => {
+							const node = filteredNodes.find((n) => n.id === hoveredNode)
+							if (!node) return null
+							const metadata = "metadata" in node ? node.metadata : undefined
+							return (
+								<div>
+									<div className="font-medium">
+										{node.name} ({node.type})
+									</div>
+									{"path" in node && <div className="opacity-80">{node.path}</div>}
+									{metadata && <div className="opacity-70">{metadata}</div>}
+								</div>
+							)
+						})()}
 					</div>
 				)}
 			</div>
 
-			{selectedPath && (
-				<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)] truncate">Selected: {selectedPath}</div>
+			{selectedNodeData && (
+				<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)]">
+					<div className="flex items-center gap-1 flex-wrap">
+						<span>Selected:</span>
+						{breadcrumbParts.length > 0 &&
+							breadcrumbParts.map((part, index) => {
+								const packagePath = breadcrumbParts.slice(0, index + 1).join("/")
+								return (
+									<React.Fragment key={packagePath}>
+										<button
+											className="hover:underline text-[var(--vscode-foreground)]"
+											onClick={() => selectPackage(packagePath)}
+											type="button">
+											{part}
+										</button>
+										{index < breadcrumbParts.length - 1 && <span>/</span>}
+									</React.Fragment>
+								)
+							})}
+						<span className="text-[var(--vscode-foreground)]">{selectedNodeData.name}</span>
+						<span className="text-[var(--vscode-descriptionForeground)]">({selectedNodeData.type})</span>
+					</div>
+					{"path" in selectedNodeData && <div className="truncate mt-0.5">{selectedNodeData.path}</div>}
+					{selectedNodeData.sourceFile && ("line" in selectedNodeData ? selectedNodeData.line : 0) > 0 && (
+						<div className="truncate text-[var(--vscode-descriptionForeground)]">
+							{selectedNodeData.sourceFile.split(/[/\\]/).pop()}:{
+								"line" in selectedNodeData ? selectedNodeData.line : "?"} — double-click to open
+						</div>
+					)}
+				</div>
 			)}
 			{noticeElement}
 		</div>

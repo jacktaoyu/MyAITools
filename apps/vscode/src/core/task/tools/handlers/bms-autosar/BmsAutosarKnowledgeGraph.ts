@@ -31,6 +31,9 @@ export interface ArxmlNode {
 	name: string
 	path: string
 	packagePath: string
+	sourceFile: string
+	line: number
+	offset?: number
 }
 
 export interface ArxmlEdge {
@@ -42,6 +45,7 @@ export interface ArxmlEdge {
 export interface ArxmlGraph {
 	nodes: Map<string, ArxmlNode>
 	edges: ArxmlEdge[]
+	sourceFile?: string
 }
 
 const NODE_TYPE_MAP: Record<string, ArxmlNodeType> = {
@@ -196,6 +200,26 @@ function inferRelation(tag: string): ArxmlEdge["relation"] {
 	return "references"
 }
 
+function lineAtOffset(content: string, offset: number): number {
+	let line = 1
+	for (let i = 0; i < offset; i++) {
+		if (content[i] === "\n") line++
+	}
+	return line
+}
+
+function findLineForShortName(content: string, shortName: string, startIndex = 0): number {
+	const regex = new RegExp(`<SHORT-NAME\\b[^>]*>${escapeRegex(shortName)}</SHORT-NAME>`, "g")
+	regex.lastIndex = startIndex
+	const match = regex.exec(content)
+	if (!match) return 1
+	return lineAtOffset(content, match.index)
+}
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 /**
  * Parse ARXML text into a graph of AUTOSAR elements.
  *
@@ -203,8 +227,8 @@ function inferRelation(tag: string): ArxmlEdge["relation"] {
  * without pulling in a full XML DOM library. It focuses on the element types
  * most relevant for BMS AUTOSAR code generation.
  */
-export function buildArxmlKnowledgeGraphRegex(content: string): ArxmlGraph {
-	const graph: ArxmlGraph = { nodes: new Map(), edges: [] }
+export function buildArxmlKnowledgeGraphRegex(content: string, sourceFile = ""): ArxmlGraph {
+	const graph: ArxmlGraph = { nodes: new Map(), edges: [], sourceFile }
 	if (!content || content.trim().length === 0) {
 		return graph
 	}
@@ -233,6 +257,9 @@ export function buildArxmlKnowledgeGraphRegex(content: string): ArxmlGraph {
 				name: sn.name,
 				path: pathStr,
 				packagePath,
+				sourceFile,
+				line: lineAtOffset(content, sn.offset),
+				offset: sn.offset,
 			})
 		}
 	}
@@ -279,8 +306,8 @@ export function buildArxmlKnowledgeGraphRegex(content: string): ArxmlGraph {
  * Build an ARXML knowledge graph. Uses the XML parser by default and falls back
  * to the regex-based parser when XML parsing is unavailable or fails.
  */
-export function buildArxmlKnowledgeGraph(content: string): ArxmlGraph {
-	return buildArxmlKnowledgeGraphFromXml(content)
+export function buildArxmlKnowledgeGraph(content: string, sourceFile?: string): ArxmlGraph {
+	return buildArxmlKnowledgeGraphFromXml(content, sourceFile)
 }
 
 /**
@@ -304,6 +331,8 @@ function resolveReferenceTarget(graph: ArxmlGraph, targetType: ArxmlNodeType, re
 
 interface XmlWalkState {
 	graph: ArxmlGraph
+	content: string
+	sourceFile: string
 	packageStack: string[]
 	nodeStack: ArxmlNode[]
 	pendingRefs: Array<{ sourceId: string; tagName: string; refPath: string; dest?: string }>
@@ -353,7 +382,15 @@ function walkXmlAst(nodes: unknown[], state: XmlWalkState): void {
 				const id = `AR-PACKAGE:${pathStr}`
 				packageNode = state.graph.nodes.get(id)
 				if (!packageNode) {
-					packageNode = { id, type: "AR-PACKAGE", name: shortName, path: pathStr, packagePath }
+					packageNode = {
+						id,
+						type: "AR-PACKAGE",
+						name: shortName,
+						path: pathStr,
+						packagePath,
+						sourceFile: state.sourceFile,
+						line: findLineForShortName(state.content, shortName),
+					}
 					state.graph.nodes.set(id, packageNode)
 				}
 				state.packageStack.push(shortName)
@@ -399,7 +436,15 @@ function ensureArxmlNode(state: XmlWalkState, nodeType: ArxmlNodeType, shortName
 	const id = `${nodeType}:${pathStr}`
 	const existing = state.graph.nodes.get(id)
 	if (existing) return existing
-	const newNode: ArxmlNode = { id, type: nodeType, name: shortName, path: pathStr, packagePath }
+	const newNode: ArxmlNode = {
+		id,
+		type: nodeType,
+		name: shortName,
+		path: pathStr,
+		packagePath,
+		sourceFile: state.sourceFile,
+		line: findLineForShortName(state.content, shortName),
+	}
 	state.graph.nodes.set(id, newNode)
 	return newNode
 }
@@ -418,8 +463,8 @@ function addContainsEdgeFromStack(state: XmlWalkState, childNode: ArxmlNode): vo
  * Build an ARXML knowledge graph using a fast XML parser.
  * Falls back to the regex-based parser if XML parsing fails.
  */
-export function buildArxmlKnowledgeGraphFromXml(content: string): ArxmlGraph {
-	const graph: ArxmlGraph = { nodes: new Map(), edges: [] }
+export function buildArxmlKnowledgeGraphFromXml(content: string, sourceFile?: string): ArxmlGraph {
+	const graph: ArxmlGraph = { nodes: new Map(), edges: [], sourceFile }
 	if (!content || content.trim().length === 0) {
 		return graph
 	}
@@ -433,9 +478,16 @@ export function buildArxmlKnowledgeGraphFromXml(content: string): ArxmlGraph {
 		})
 		const ast = parser.parse(content)
 		if (!Array.isArray(ast)) {
-			return buildArxmlKnowledgeGraph(content)
+			return buildArxmlKnowledgeGraph(content, sourceFile)
 		}
-		const state: XmlWalkState = { graph, packageStack: [], nodeStack: [], pendingRefs: [] }
+		const state: XmlWalkState = {
+			graph,
+			content,
+			sourceFile: sourceFile ?? "",
+			packageStack: [],
+			nodeStack: [],
+			pendingRefs: [],
+		}
 		walkXmlAst(ast, state)
 		for (const { sourceId, tagName, refPath, dest } of state.pendingRefs) {
 			const targetType = inferRefTargetType(tagName, dest)
@@ -444,7 +496,7 @@ export function buildArxmlKnowledgeGraphFromXml(content: string): ArxmlGraph {
 		}
 		return graph
 	} catch {
-		return buildArxmlKnowledgeGraphRegex(content)
+		return buildArxmlKnowledgeGraphRegex(content, sourceFile)
 	}
 }
 

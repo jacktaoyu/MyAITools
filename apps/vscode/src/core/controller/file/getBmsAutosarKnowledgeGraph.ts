@@ -64,7 +64,7 @@ export async function getBmsAutosarKnowledgeGraph(
 		let graph = await loadArxmlGraphCached(filePath);
 		if (!graph) {
 			const content = await fs.readFile(filePath, "utf-8");
-			graph = buildArxmlKnowledgeGraph(content);
+			graph = buildArxmlKnowledgeGraph(content, filePath);
 			await saveArxmlGraphCached(filePath, stat.mtimeMs, graph);
 		}
 
@@ -81,6 +81,8 @@ export async function getBmsAutosarKnowledgeGraph(
 				name: node.name,
 				path: node.path,
 				packagePath: node.packagePath,
+				sourceFile: node.sourceFile,
+				line: node.line,
 			}),
 		),
 		edges: mergedGraph.edges.map((edge) =>

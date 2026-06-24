@@ -4,10 +4,61 @@
 
 ---
 
-## 2026-06-23（第三十六次迭代 / 知识图谱布局优化：防重叠、缩放、平移）
+## 2026-06-25（第三十七次迭代 / 知识图谱源定位与外部数据联动）
 
 ### 新增功能
 
+- **ARXML 节点源文件定位**
+  - `ArxmlNode` / `ArxmlGraph` 新增 `sourceFile` 与 `line` 字段，记录每个 AUTOSAR 元素所在的源文件与行号。
+  - XML 解析器与 Regex 解析器均记录 `sourceFile` 并通过 `findLineForShortName` 计算 `<SHORT-NAME>` 行号。
+  - `getBmsAutosarKnowledgeGraph` 在合并多文件图谱时透传 `sourceFile` / `line` 到 proto 响应。
+
+- **打开 ARXML 源文件**
+  - 新增 `openArxmlSource` RPC 与后端 handler：`src/core/controller/file/openArxmlSource.ts`。
+  - 通过 `HostProvider.window.showTextDocument` 在 VS Code 中打开 ARXML 并跳转到对应行。
+  - `proto/host/window.proto` 为 `ShowTextDocumentOptions` 新增 `Selection` 字段，宿主端 `showTextDocument.ts` 完成 VS Code `Selection` 转换。
+
+- **知识图谱交互增强**
+  - `BmsAutosarKnowledgeGraphRenderer.tsx` 重写为 Cytoscape.js 渲染器，支持 AR-PACKAGE 组合节点（compound nodes）。
+  - 新增关系类型过滤：contains / provides / requires / implements / references / triggers。
+  - 新增 `Dagre (hierarchical)` 层次布局，与原有的 cose / cose-bilkent / grid / circle / concentric / breadthfirst 共同组成 7 种布局。
+  - 双击节点调用 `openArxmlSource`，打开对应 ARXML 行。
+  - 选中节点底部显示面包屑导航，点击包名可聚焦对应 AR-PACKAGE。
+  - 节点类型过滤、搜索、缩放、Fit、PNG 导出、Mermaid 导出全部保留并优化。
+
+- **外部数据源联动**
+  - 新增 `parseBmsAutosarDbc` RPC：复用 `BmsAutosarDbcParser.ts` 输出 `CAN-SIGNAL` 节点。
+  - 新增 `parseBmsAutosarExcel` RPC：使用 `ExcelJS` 解析 `BMS_Interface.xlsx` / `BMS_Parameter.xlsx`，输出 `EXCEL-INTERFACE` / `EXCEL-PARAMETER` 节点。
+  - 新增 `parseBmsAutosarSimulinkData` RPC：正则解析 `.m` 数据字典中的 `Simulink.NumericType`、`Simulink.defineIntEnumType`、`Simulink.AliasType`，输出 `SIMULINK-DATA` 节点。
+  - `proto/cline/file.proto` 新增 `BmsAutosarExternalNode`、`BmsAutosarExternalEdge`、`BmsAutosarExternalGraph` 与上述 RPC，并重新生成所有客户端/服务端代码。
+  - 前端 `BmsAutosarKnowledgeGraphRenderer.tsx` 新增 `Link DBC` / `Link Excel` / `Link Simulink` 按钮，选择外部文件后渲染外部节点并按名称大小写不敏感精确匹配自动建立 `references` 边。
+
+- **插件激活稳定性**
+  - `hnswlib-node` 改为运行时动态 `import()`，避免扩展激活期原生模块加载崩溃。
+  - `package.json` 补充 `cline.bmsAutosarDashboard` 等激活事件。
+
+### 文档与交付物
+
+- 新增 `docs/bms-autosar-demo-guide.md`：详细演示操作说明。
+- 新增 `docs/bms-autosar-demo-script.md`：完整演讲逐字稿。
+- 新增 `docs/bms-autosar-demo-slides.pptx`：11 页 PPT 大纲。
+- 新增 `docs/bms-autosar-technical-summary.md`：技术实现细节总结。
+- 新增 `docs/bms-autosar-project-delivery.md`：完整项目交付文档（含操作说明、演讲稿、技术总结整合）。
+
+### 构建验证
+
+- `npm run check-types` 全部通过。
+- `npm run lint`、`npm run lint:proto` 全部通过。
+- `NODE_OPTIONS=--no-experimental-strip-types npm run test:unit` 共 **1716** 项通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（9.12 MB）。
+
+---
+
+## 2026-06-23（第三十六次迭代 / 知识图谱布局优化：防重叠、缩放、平移）
+
+### 新增功能
+ /
+ 
 - **ARXML 知识图谱布局与交互优化**
   - 重写 `BmsAutosarKnowledgeGraphRenderer.tsx` 的力导向布局：引入节点碰撞检测与多轮碰撞消解，显著减少节点堆叠。
   - 节点半径由 28 调整为 22，节点间距加入 8px padding，初始分布半径增大，使整体更分散。
