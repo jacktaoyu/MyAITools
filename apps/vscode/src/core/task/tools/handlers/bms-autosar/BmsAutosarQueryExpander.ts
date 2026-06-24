@@ -9,6 +9,8 @@
  * embedding model.
  */
 
+export type BmsAutosarKnowledgeIntent = "general" | "component_lookup" | "safety_guidance" | "interface_search"
+
 export interface QueryExpansion {
 	/** Query with expansion terms appended. */
 	expanded: string
@@ -16,6 +18,8 @@ export interface QueryExpansion {
 	original: string
 	/** Terms that were added by the expansion. */
 	addedTerms: string[]
+	/** Inferred retrieval intent. */
+	intent: BmsAutosarKnowledgeIntent
 }
 
 /**
@@ -65,6 +69,75 @@ function tokenizeForExpansion(text: string): string[] {
 		.filter((token) => token.length > 1)
 }
 
+const COMPONENT_KEYWORDS = new Set([
+	"swc",
+	"bsw",
+	"module",
+	"component",
+	"csc",
+	"controller",
+	"balancer",
+	"charger",
+	"thermal",
+	"diagnosis",
+])
+
+const SAFETY_KEYWORDS = new Set([
+	"asil",
+	"safety",
+	"wdgm",
+	"e2e",
+	"det",
+	"range",
+	"check",
+	"monitor",
+	"fault",
+	"fail",
+])
+
+const INTERFACE_KEYWORDS = new Set([
+	"port",
+	"interface",
+	"sender",
+	"receiver",
+	"runnable",
+	"rte",
+	"signal",
+	"com",
+	"pdu",
+	"can",
+])
+
+export function parseAutosarIntent(query: string): BmsAutosarKnowledgeIntent {
+	const tokens = tokenizeForExpansion(query)
+	let componentScore = 0
+	let safetyScore = 0
+	let interfaceScore = 0
+
+	for (const token of tokens) {
+		if (COMPONENT_KEYWORDS.has(token)) {
+			componentScore++
+		}
+		if (SAFETY_KEYWORDS.has(token)) {
+			safetyScore++
+		}
+		if (INTERFACE_KEYWORDS.has(token)) {
+			interfaceScore++
+		}
+	}
+
+	if (safetyScore > 0 && safetyScore >= componentScore && safetyScore >= interfaceScore) {
+		return "safety_guidance"
+	}
+	if (interfaceScore > 0 && interfaceScore >= componentScore) {
+		return "interface_search"
+	}
+	if (componentScore > 0) {
+		return "component_lookup"
+	}
+	return "general"
+}
+
 /**
  * Expands an AUTOSAR/BMS query with domain synonyms.
  *
@@ -76,7 +149,7 @@ function tokenizeForExpansion(text: string): string[] {
 export function expandAutosarQuery(query: string): QueryExpansion {
 	const normalized = query.trim()
 	if (!normalized) {
-		return { expanded: "", original: "", addedTerms: [] }
+		return { expanded: "", original: "", addedTerms: [], intent: "general" }
 	}
 
 	const tokens = tokenizeForExpansion(normalized)
@@ -93,6 +166,7 @@ export function expandAutosarQuery(query: string): QueryExpansion {
 
 	const addedTerms = Array.from(added)
 	const expanded = addedTerms.length > 0 ? `${normalized} ${addedTerms.join(" ")}` : normalized
+	const intent = parseAutosarIntent(normalized)
 
-	return { expanded, original: normalized, addedTerms }
+	return { expanded, original: normalized, addedTerms, intent }
 }

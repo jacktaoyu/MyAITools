@@ -3,9 +3,11 @@ import { getClineHomePath } from "@/core/storage/disk";
 import { loadBmsAutosarKnowledgeBaseWithSourcesCached } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache";
 import { retrieveRelevantKnowledgeResults } from "@core/task/tools/handlers/bms-autosar/BmsAutosarSemanticRetrieval";
 import {
+	BmsAutosarKnowledgeIntent,
 	BmsKnowledgeSearchResults,
 	SearchBmsKnowledgeRequest,
 } from "@shared/proto/cline/file";
+import type { BmsAutosarKnowledgeIntent as BmsAutosarKnowledgeIntentType } from "@core/task/tools/handlers/bms-autosar/BmsAutosarQueryExpander";
 import { getCwd, getDesktopDir } from "@utils/path";
 import type { Controller } from "..";
 
@@ -69,6 +71,7 @@ export async function searchBmsKnowledge(
 		? request.sourceFiles
 		: undefined;
 	const useReranker = request.useReranker ?? false;
+	const intent = mapProtoIntentToTypeScript(request.intent);
 
 	const results = await retrieveRelevantKnowledgeResults({
 		sources,
@@ -80,6 +83,7 @@ export async function searchBmsKnowledge(
 		tags,
 		sourceFiles,
 		useReranker,
+		intent,
 	});
 
 	return BmsKnowledgeSearchResults.create({
@@ -97,4 +101,21 @@ export async function searchBmsKnowledge(
 			})),
 		})),
 	});
+}
+
+function mapProtoIntentToTypeScript(
+	intent: BmsAutosarKnowledgeIntent | undefined,
+): BmsAutosarKnowledgeIntentType | undefined {
+	switch (intent) {
+		case BmsAutosarKnowledgeIntent.COMPONENT_LOOKUP:
+			return "component_lookup";
+		case BmsAutosarKnowledgeIntent.SAFETY_GUIDANCE:
+			return "safety_guidance";
+		case BmsAutosarKnowledgeIntent.INTERFACE_SEARCH:
+			return "interface_search";
+		case BmsAutosarKnowledgeIntent.GENERAL:
+			return "general";
+		default:
+			return undefined;
+	}
 }

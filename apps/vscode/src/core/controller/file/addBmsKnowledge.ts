@@ -17,6 +17,7 @@ import {
 } from "./bmsKnowledgeStorage";
 import { extractDbcEntries } from "@core/task/tools/handlers/bms-autosar/BmsAutosarDbcParser";
 import type { BmsAutosarKnowledgeEntry } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
+import { warmBmsAutosarVectorCache } from "@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex";
 
 function hashBuffer(buffer: Buffer): string {
 	return createHash("sha256").update(buffer).digest("hex");
@@ -140,6 +141,12 @@ export async function addBmsKnowledge(
 				}),
 			);
 			const { kbPath } = await saveBmsKnowledgeEntries({ cwd, scope, entries });
+			warmBmsAutosarVectorCache(
+				entries,
+				_controller.stateManager.getApiConfiguration(),
+			).catch(() => {
+				// Best-effort embedding warm-up.
+			});
 			const message = `Added ${entries.length} DBC message entries from ${path.basename(filePath)} to ${scope} BMS AUTOSAR knowledge base (${kbPath}).`;
 			HostProvider.window.showMessage({
 				type: ShowMessageType.INFORMATION,
@@ -150,7 +157,7 @@ export async function addBmsKnowledge(
 
 		const { text, locations } =
 			await extractTextFromFileWithLocations(filePath);
-		const { chunkCount } = await saveBmsKnowledgeContent({
+		const { entries, chunkCount } = await saveBmsKnowledgeContent({
 			cwd,
 			scope,
 			topic,
@@ -162,6 +169,13 @@ export async function addBmsKnowledge(
 			sourceMtimeMs: stat.mtimeMs,
 			sourceSize: stat.size,
 			locations,
+		});
+
+		warmBmsAutosarVectorCache(
+			entries,
+			_controller.stateManager.getApiConfiguration(),
+		).catch(() => {
+			// Best-effort embedding warm-up.
 		});
 
 		const message =

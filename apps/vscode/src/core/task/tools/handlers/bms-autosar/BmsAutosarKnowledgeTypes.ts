@@ -27,6 +27,8 @@ export interface BmsAutosarKnowledgeEntry {
 	sourceMtimeMs?: number
 	/** Source file size in bytes. */
 	sourceSize?: number
+	/** SHA-256 hash of the entry content. */
+	contentHash?: string
 	/** Optional page/chapter locations (e.g. PDF page or DOCX heading). */
 	locations?: BmsAutosarKnowledgeLocation[]
 }

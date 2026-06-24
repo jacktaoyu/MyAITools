@@ -4,9 +4,10 @@ import * as path from "path"
 import { telemetryService } from "@/services/telemetry"
 import { createEmbeddings, DEFAULT_EMBEDDING_MODEL, hashContent } from "./BmsAutosarEmbeddingService"
 import { getCachedLexicalIndex, getCachedQueryEmbedding, loadVectorCached, saveVectorCached } from "./BmsAutosarKnowledgeCache"
+import { getBmsAutosarVectorIndex } from "./BmsAutosarVectorIndex"
 import { buildArxmlKnowledgeGraph, rankByGraphProximity } from "./BmsAutosarKnowledgeGraph"
 import type { BmsAutosarKnowledgeEntry, BmsAutosarKnowledgeSource } from "./BmsAutosarKnowledgeTypes"
-import { expandAutosarQuery } from "./BmsAutosarQueryExpander"
+import { expandAutosarQuery, type BmsAutosarKnowledgeIntent } from "./BmsAutosarQueryExpander"
 import { rerankWithLlm } from "./BmsAutosarReranker"
 import { BM25_B, BM25_K1, STOP_WORDS } from "./BmsAutosarRetrievalConstants"
 import { type Bm25Index, computeBm25IndexInWorker, computeBm25ScoresInWorker } from "./BmsAutosarRetrievalWorker"
@@ -32,6 +33,14 @@ export interface SemanticRetrievalOptions {
 	sourceFiles?: string[]
 	/** When true, run an LLM-as-reranker second stage over the top candidates. */
 	useReranker?: boolean
+	/**
+	 * When true (default), use an approximate vector index (HNSW) instead of a
+	 * linear scan for large knowledge bases. Falls back to linear scan if the
+	 * index cannot be built or loaded.
+	 */
+	useVectorIndex?: boolean
+	/** Optional inferred query intent used to tune retrieval strategy. */
+	intent?: BmsAutosarKnowledgeIntent
 }
 
 export interface RetrievalResult {
@@ -175,11 +184,33 @@ function clampHybridWeight(weight: number | undefined): number {
 	return Math.max(0, Math.min(1, weight))
 }
 
+function getIntentHybridWeight(intent: BmsAutosarKnowledgeIntent | undefined, explicitWeight: number | undefined): number | undefined {
+	if (explicitWeight !== undefined) {
+		return explicitWeight
+	}
+	switch (intent) {
+		case "component_lookup":
+			return 0.85
+		case "interface_search":
+			return 0.75
+		case "safety_guidance":
+			return 0.65
+		default:
+			return undefined
+	}
+}
+
+const VECTOR_INDEX_MIN_ENTRIES = 64
+const VECTOR_INDEX_CANDIDATE_MULTIPLIER = 10
+const VECTOR_INDEX_MIN_CANDIDATES = 100
+
 async function computeEmbeddingScores(
 	sources: BmsAutosarKnowledgeSource[],
 	query: string,
 	apiConfiguration: ApiConfiguration,
 	model: string,
+	candidateLimit: number,
+	useVectorIndex = true,
 ): Promise<{ scores: Map<BmsAutosarKnowledgeEntry, number>; anyNew: boolean } | undefined> {
 	const entries = sources.flatMap((source) => source.entries)
 	if (entries.length === 0) {
@@ -189,6 +220,28 @@ async function computeEmbeddingScores(
 	const queryEmbedding = await getCachedQueryEmbedding(query, model, apiConfiguration)
 	if (!queryEmbedding) {
 		return undefined
+	}
+
+	// For large knowledge bases, use an approximate vector index to avoid the
+	 // O(N) linear cosine scan. The index is keyed by the content hash of the
+	 // entry set, so it is automatically invalidated when entries change.
+	if (useVectorIndex && entries.length >= VECTOR_INDEX_MIN_ENTRIES) {
+		try {
+			const vectorIndex = await getBmsAutosarVectorIndex(entries, model)
+			const loaded = await vectorIndex.load()
+			if (!loaded) {
+				await vectorIndex.build(entries, model, { apiConfiguration, model })
+			}
+			const k = Math.min(candidateLimit, entries.length)
+			const results = await vectorIndex.search(queryEmbedding.vector, k)
+			const scores = new Map<BmsAutosarKnowledgeEntry, number>()
+			for (const { entryIndex, score } of results) {
+				scores.set(entries[entryIndex], score)
+			}
+			return { scores, anyNew: !loaded }
+		} catch {
+			// Fall back to the linear scan below if the index fails to build or search.
+		}
 	}
 
 	const textsToEmbed: string[] = []
@@ -291,6 +344,8 @@ export async function retrieveRelevantKnowledgeResults(options: SemanticRetrieva
 		tags,
 		sourceFiles,
 		useReranker,
+		useVectorIndex,
+		intent,
 	} = options
 
 	const filteredSources = filterSourcesByMetadata(sources, tags, sourceFiles)
@@ -315,7 +370,15 @@ export async function retrieveRelevantKnowledgeResults(options: SemanticRetrieva
 	let _embeddingAnyNew = false
 
 	try {
-		const embeddingResult = await computeEmbeddingScores(filteredSources, expandedQuery, apiConfiguration, embeddingModel)
+		const candidateLimit = Math.max(topK * VECTOR_INDEX_CANDIDATE_MULTIPLIER, VECTOR_INDEX_MIN_CANDIDATES)
+		const embeddingResult = await computeEmbeddingScores(
+			filteredSources,
+			expandedQuery,
+			apiConfiguration,
+			embeddingModel,
+			candidateLimit,
+			useVectorIndex,
+		)
 		if (embeddingResult) {
 			embeddingScores = embeddingResult.scores
 			_embeddingAnyNew = embeddingResult.anyNew
@@ -330,7 +393,7 @@ export async function retrieveRelevantKnowledgeResults(options: SemanticRetrieva
 		telemetryService.captureBmsAutosarRetrievalTfidfFallback()
 	}
 
-	const embeddingWeight = clampHybridWeight(options.hybridWeight)
+	const embeddingWeight = clampHybridWeight(getIntentHybridWeight(intent, options.hybridWeight))
 	const lexicalWeight = 1 - embeddingWeight
 
 	const rawLexicalScores = entries.map((entry) => lexicalScores.get(entry) ?? 0)

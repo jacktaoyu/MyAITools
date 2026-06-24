@@ -456,6 +456,15 @@ message UpdateBmsKnowledgeRequest {
   string scope = 5; // "workspace" or "global"
 }
 
+// Query intent for BMS AUTOSAR knowledge retrieval.
+enum BmsAutosarKnowledgeIntent {
+  UNKNOWN = 0;
+  GENERAL = 1;
+  COMPONENT_LOOKUP = 2;
+  SAFETY_GUIDANCE = 3;
+  INTERFACE_SEARCH = 4;
+}
+
 // Request to search the BMS AUTOSAR knowledge base.
 message SearchBmsKnowledgeRequest {
   Metadata metadata = 1;
@@ -467,6 +476,7 @@ message SearchBmsKnowledgeRequest {
   double hybrid_weight = 7;
   double score_threshold = 8;
   bool use_reranker = 9;
+  BmsAutosarKnowledgeIntent intent = 10;
 }
 
 // A single semantic/lexical search result.

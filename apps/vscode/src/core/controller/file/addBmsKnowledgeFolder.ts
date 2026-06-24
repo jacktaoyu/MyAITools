@@ -16,6 +16,7 @@ import {
 	saveBmsKnowledgeEntries,
 } from "./bmsKnowledgeStorage";
 import type { BmsAutosarKnowledgeEntry } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
+import { warmBmsAutosarVectorCache } from "@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex";
 
 interface FileExtractionResult {
 	relativePath: string;
@@ -183,6 +184,13 @@ export async function addBmsKnowledgeFolder(
 		scope,
 		entries: newEntries,
 		removedSourcePaths,
+	});
+
+	warmBmsAutosarVectorCache(
+		newEntries,
+		_controller.stateManager.getApiConfiguration(),
+	).catch(() => {
+		// Best-effort embedding warm-up.
 	});
 
 	const failureSummary =

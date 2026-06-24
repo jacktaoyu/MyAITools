@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert"
 import { describe, it } from "mocha"
-import { expandAutosarQuery } from "../BmsAutosarQueryExpander"
+import { expandAutosarQuery, parseAutosarIntent } from "../BmsAutosarQueryExpander"
 
 describe("BmsAutosarQueryExpander", () => {
 	it("returns empty expansion for empty query", () => {
@@ -42,5 +42,31 @@ describe("BmsAutosarQueryExpander", () => {
 		const result = expandAutosarQuery("SOC SOH state-estimation")
 		const stateOfChargeCount = result.addedTerms.filter((term) => term === "StateOfCharge").length
 		assert.equal(stateOfChargeCount, 1)
+	})
+
+	describe("parseAutosarIntent", () => {
+		it("detects component lookup intent", () => {
+			assert.equal(parseAutosarIntent("Generate a BMS controller SWC"), "component_lookup")
+			assert.equal(parseAutosarIntent("CSC voltage measurement"), "component_lookup")
+		})
+
+		it("detects safety guidance intent", () => {
+			assert.equal(parseAutosarIntent("ASIL D safety requirements"), "safety_guidance")
+			assert.equal(parseAutosarIntent("WdgM E2E monitoring"), "safety_guidance")
+		})
+
+		it("detects interface search intent", () => {
+			assert.equal(parseAutosarIntent("RTE sender receiver interface"), "interface_search")
+			assert.equal(parseAutosarIntent("CAN signal PDU"), "interface_search")
+		})
+
+		it("defaults to general intent", () => {
+			assert.equal(parseAutosarIntent("hello world"), "general")
+		})
+
+		it("includes intent in query expansion", () => {
+			const result = expandAutosarQuery("ASIL B CSC requirements")
+			assert.equal(result.intent, "safety_guidance")
+		})
 	})
 })

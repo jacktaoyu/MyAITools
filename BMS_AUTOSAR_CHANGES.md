@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-06-23（第三十二次迭代 / RAG 性能与效果升级：HNSW 向量索引 + 查询意图）
+
+### 新增功能
+
+- **近似向量索引（HNSW）**
+  - 新增 `BmsAutosarVectorIndex.ts`，基于 `hnswlib-node` 实现 cosine 空间 HNSW 索引。
+  - 索引键为 `entriesHash + embeddingModel`，自动在知识条目变化时失效。
+  - 索引文件持久化到 `~/.cline/bms-autosar/cache/vector-index/`。
+  - `BmsAutosarSemanticRetrieval.ts` 在条目数 ≥ 64 时优先使用向量索引，将 embedding 检索从 O(N) 线性扫描降到近似 O(log N)；索引不可用时自动退化到线性扫描。
+
+- **批量向量预热**
+  - 新增 `warmBmsAutosarVectorCache()`，在单文件/文件夹导入完成后后台批量计算并持久化缺失的 embedding。
+  - `addBmsKnowledge.ts` 与 `addBmsKnowledgeFolder.ts` 导入完成后自动触发预热，避免首次检索时的延迟。
+
+- **查询意图解析**
+  - 扩展 `BmsAutosarQueryExpander.ts`：新增 `parseAutosarIntent()`，输出 `general` / `component_lookup` / `safety_guidance` / `interface_search`。
+  - `proto/cline/file.proto`：`SearchBmsKnowledgeRequest` 新增 `BmsAutosarKnowledgeIntent intent` 字段，并重新生成 gRPC 桩代码。
+  - `searchBmsKnowledge.ts` 将 proto intent 映射到 TypeScript 类型并传入检索器。
+  - `BmsAutosarSemanticRetrieval.ts` 根据 intent 自动调整 hybrid weight：component_lookup 偏重 embedding（0.85），interface_search 平衡（0.75），safety_guidance 偏重 BM25（0.65）。
+
+- **知识条目 contentHash**
+  - `BmsAutosarKnowledgeTypes.ts` 新增 `contentHash?: string`。
+  - `bmsKnowledgeStorage.ts` 在保存条目时自动计算并写入 `contentHash`，为向量缓存与索引提供稳定键值。
+
+### 单元测试
+
+- 新增 `BmsAutosarVectorIndex.test.ts`：覆盖索引构建/搜索、磁盘加载、条目变化失效、空集处理、向量预热。
+- 扩展 `BmsAutosarQueryExpander.test.ts`：覆盖意图识别与 query expansion 返回 intent。
+- 全量单元测试通过：`npm run test:unit` 共 **1695** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`。
+
+---
+
 ## 2026-06-22（第三十一次迭代 / RAG 增强、工程债务清理、Webview 体验与发布自动化）
 
 ### 新增功能

@@ -12,6 +12,7 @@ import {
 	MAX_CHUNK_CHARS,
 } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
 import { migrateEntryEmbeddingToVectorCache } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache";
+import { hashContent } from "@core/task/tools/handlers/bms-autosar/BmsAutosarEmbeddingService";
 
 export interface SaveBmsKnowledgeContentOptions {
 	cwd: string;
@@ -39,6 +40,7 @@ export interface SaveBmsKnowledgeEntriesOptions {
 }
 
 export interface SaveBmsKnowledgeContentResult {
+	entries: BmsAutosarKnowledgeEntry[];
 	chunkCount: number;
 	kbPath: string;
 }
@@ -155,6 +157,9 @@ export async function saveBmsKnowledgeEntries({
 		if (!entry.createdAt) {
 			entry.createdAt = now;
 		}
+		if (!entry.contentHash) {
+			entry.contentHash = hashContent(entry.content);
+		}
 		await migrateEntryEmbeddingToVectorCache(entry);
 	}
 
@@ -244,10 +249,17 @@ export async function saveBmsKnowledgeContent({
 	});
 
 	for (const entry of entries) {
+		if (!entry.contentHash) {
+			entry.contentHash = hashContent(entry.content);
+		}
 		await migrateEntryEmbeddingToVectorCache(entry);
 	}
 	data.entries.push(...entries);
 
 	await writeBmsKnowledgeFile(kbPath, data);
-	return { chunkCount: entries.length > 1 ? entries.length : 0, kbPath };
+	return {
+		entries,
+		chunkCount: entries.length > 1 ? entries.length : 0,
+		kbPath,
+	};
 }
