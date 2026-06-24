@@ -60,6 +60,30 @@ describe("BmsAutosarRequirementParser", () => {
 			assert.ok(names.includes("ChargerVoltage"))
 			assert.ok(names.includes("ChargerCurrent"))
 		})
+
+		it("infers state estimator and power limiter ports", () => {
+			const ports = inferPortsFromRequirements(
+				"Estimate SOC, SOH, SOP, and SOE using cell voltage, temperature, and pack current. Compute charge and discharge power limits.",
+			)
+			const names = ports.map((p) => p.name)
+			assert.ok(names.includes("StateOfCharge"))
+			assert.ok(names.includes("StateOfHealth"))
+			assert.ok(names.includes("StateOfPower"))
+			assert.ok(names.includes("StateOfEnergy"))
+			assert.ok(names.includes("ChargePowerLimit"))
+			assert.ok(names.includes("DischargePowerLimit"))
+		})
+
+		it("infers insulation monitor and current sensor ports", () => {
+			const ports = inferPortsFromRequirements(
+				"Monitor HV bus insulation resistance and detect insulation fault. Measure pack current from a Hall sensor raw ADC input.",
+			)
+			const names = ports.map((p) => p.name)
+			assert.ok(names.includes("HvBusVoltage"))
+			assert.ok(names.includes("InsulationResistance"))
+			assert.ok(names.includes("InsulationFault"))
+			assert.ok(names.includes("RawAdcCurrent"))
+		})
 	})
 
 	describe("inferRunnablesFromRequirements", () => {
@@ -117,6 +141,23 @@ describe("BmsAutosarRequirementParser", () => {
 
 		it("infers bms_diagnosis from diagnosis keywords", () => {
 			assert.equal(inferComponentTypeFromRequirements("Manage DTCs and DEM faults"), "bms_diagnosis")
+		})
+
+		it("infers bms_state_estimator from SOC/SOH/SOP keywords", () => {
+			assert.equal(inferComponentTypeFromRequirements("Estimate SOC and SOH with a Kalman filter"), "bms_state_estimator")
+			assert.equal(inferComponentTypeFromRequirements("Compute SOP and SOE"), "bms_state_estimator")
+		})
+
+		it("infers bms_power_limiter from power limit keywords", () => {
+			assert.equal(inferComponentTypeFromRequirements("Calculate charge and discharge power limits"), "bms_power_limiter")
+		})
+
+		it("infers bms_insulation_monitor from insulation keywords", () => {
+			assert.equal(inferComponentTypeFromRequirements("Monitor HV isolation resistance"), "bms_insulation_monitor")
+		})
+
+		it("infers bms_current_sensor from current sensor keywords", () => {
+			assert.equal(inferComponentTypeFromRequirements("Hall sensor current measurement"), "bms_current_sensor")
 		})
 	})
 })

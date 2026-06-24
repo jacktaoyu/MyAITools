@@ -39,6 +39,10 @@ const COMPONENT_TYPES = [
 	{ value: "bms_thermal_manager", label: "BMS Thermal Manager" },
 	{ value: "bms_charger", label: "BMS Charger" },
 	{ value: "bms_diagnosis", label: "BMS Diagnosis" },
+	{ value: "bms_state_estimator", label: "BMS State Estimator" },
+	{ value: "bms_power_limiter", label: "BMS Power Limiter" },
+	{ value: "bms_insulation_monitor", label: "BMS Insulation Monitor" },
+	{ value: "bms_current_sensor", label: "BMS Current Sensor" },
 ]
 
 const OUTPUT_FORMATS = [

@@ -403,6 +403,95 @@ describe("BmsAutosarGenerateHandler", () => {
 		assert.ok(blueprint.includes("EventHandler"))
 	})
 
+	it("generates a bms_state_estimator blueprint with SOC/SOH/SOP ports", async () => {
+		const { config } = createConfig()
+		const handler = new BmsAutosarGenerateHandler()
+
+		const result = await handler.execute(config, {
+			type: "tool_use",
+			name: ClineDefaultTool.BMS_AUTOSAR_GENERATE,
+			params: {
+				component_type: "bms_state_estimator",
+				component_name: "BmsStateEstimator",
+			},
+			partial: false,
+		})
+
+		const blueprint = result as string
+		assert.ok(blueprint.includes("BmsStateEstimator"))
+		assert.ok(blueprint.includes("StateOfCharge"))
+		assert.ok(blueprint.includes("StateOfHealth"))
+		assert.ok(blueprint.includes("StateOfPower"))
+		assert.ok(blueprint.includes("StateOfEnergy"))
+		assert.ok(blueprint.includes("Run100ms"))
+		assert.ok(blueprint.includes("Run1s"))
+		assert.ok(blueprint.includes("BmsStateEstimator_Types.arxml"))
+	})
+
+	it("generates a bms_power_limiter blueprint with charge/discharge limits", async () => {
+		const { config } = createConfig()
+		const handler = new BmsAutosarGenerateHandler()
+
+		const result = await handler.execute(config, {
+			type: "tool_use",
+			name: ClineDefaultTool.BMS_AUTOSAR_GENERATE,
+			params: {
+				component_type: "bms_power_limiter",
+				component_name: "BmsPowerLimiter",
+			},
+			partial: false,
+		})
+
+		const blueprint = result as string
+		assert.ok(blueprint.includes("BmsPowerLimiter"))
+		assert.ok(blueprint.includes("ChargePowerLimit"))
+		assert.ok(blueprint.includes("DischargePowerLimit"))
+		assert.ok(blueprint.includes("Power_KwType"))
+	})
+
+	it("generates a bms_insulation_monitor blueprint", async () => {
+		const { config } = createConfig()
+		const handler = new BmsAutosarGenerateHandler()
+
+		const result = await handler.execute(config, {
+			type: "tool_use",
+			name: ClineDefaultTool.BMS_AUTOSAR_GENERATE,
+			params: {
+				component_type: "bms_insulation_monitor",
+				component_name: "BmsInsulationMonitor",
+			},
+			partial: false,
+		})
+
+		const blueprint = result as string
+		assert.ok(blueprint.includes("BmsInsulationMonitor"))
+		assert.ok(blueprint.includes("InsulationResistance"))
+		assert.ok(blueprint.includes("InsulationFault"))
+		assert.ok(blueprint.includes("HvBusVoltage"))
+	})
+
+	it("generates a bms_current_sensor blueprint", async () => {
+		const { config } = createConfig()
+		const handler = new BmsAutosarGenerateHandler()
+
+		const result = await handler.execute(config, {
+			type: "tool_use",
+			name: ClineDefaultTool.BMS_AUTOSAR_GENERATE,
+			params: {
+				component_type: "bms_current_sensor",
+				component_name: "BmsCurrentSensor",
+			},
+			partial: false,
+		})
+
+		const blueprint = result as string
+		assert.ok(blueprint.includes("BmsCurrentSensor"))
+		assert.ok(blueprint.includes("RawAdcCurrent"))
+		assert.ok(blueprint.includes("PackCurrent"))
+		assert.ok(blueprint.includes("CurrentSensorFault"))
+		assert.ok(blueprint.includes("Run10ms"))
+	})
+
 	it("infers component type from requirements when component_type is omitted", async () => {
 		const { config } = createConfig()
 		const handler = new BmsAutosarGenerateHandler()

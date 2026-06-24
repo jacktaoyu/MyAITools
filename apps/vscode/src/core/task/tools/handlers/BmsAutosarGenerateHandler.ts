@@ -219,6 +219,10 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 			"bms_thermal_manager",
 			"bms_charger",
 			"bms_diagnosis",
+			"bms_state_estimator",
+			"bms_power_limiter",
+			"bms_insulation_monitor",
+			"bms_current_sensor",
 		]
 		if (!validTypes.includes(componentType)) {
 			config.taskState.consecutiveMistakeCount++
@@ -420,7 +424,11 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 				componentType === "bms_balancer" ||
 				componentType === "bms_thermal_manager" ||
 				componentType === "bms_charger" ||
-				componentType === "bms_diagnosis"
+				componentType === "bms_diagnosis" ||
+				componentType === "bms_state_estimator" ||
+				componentType === "bms_power_limiter" ||
+				componentType === "bms_insulation_monitor" ||
+				componentType === "bms_current_sensor"
 			) {
 				filesToGenerate.push(`${fileBase}.h`)
 				filesToGenerate.push(`${fileBase}.c`)
@@ -446,7 +454,11 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 					componentType === "bms_balancer" ||
 					componentType === "bms_thermal_manager" ||
 					componentType === "bms_charger" ||
-					componentType === "bms_diagnosis"
+					componentType === "bms_diagnosis" ||
+					componentType === "bms_state_estimator" ||
+					componentType === "bms_power_limiter" ||
+					componentType === "bms_insulation_monitor" ||
+					componentType === "bms_current_sensor"
 				) {
 					filesToGenerate.push(`${fileBase}_Types.arxml`)
 				}

@@ -87,6 +87,42 @@ const PORT_RULES: PortRule[] = [
 		patterns: [/fault\s+status|\bfault\b/i],
 		port: { name: "FaultStatus", interface_type: "S/R", direction: "provided", data_type: "uint16" },
 	},
+	{
+		patterns: [/state\s+of\s+power|\bsop\b|power\s+limit/i],
+		port: { name: "StateOfPower", interface_type: "S/R", direction: "provided", data_type: "Power_KwType" },
+	},
+	{
+		patterns: [/state\s+of\s+energy|\bsoe\b/i],
+		port: { name: "StateOfEnergy", interface_type: "S/R", direction: "provided", data_type: "Energy_WhType" },
+	},
+	{
+		patterns: [/charge\s+power\s+limit|\bcharge\s+limit\b/i],
+		port: { name: "ChargePowerLimit", interface_type: "S/R", direction: "provided", data_type: "Power_KwType" },
+	},
+	{
+		patterns: [/discharge\s+power\s+limit|\bdischarge\s+limit\b/i],
+		port: { name: "DischargePowerLimit", interface_type: "S/R", direction: "provided", data_type: "Power_KwType" },
+	},
+	{
+		patterns: [/insulation\s+resistance|insulation\s+monitor|isolation\s+resistance/i],
+		port: { name: "InsulationResistance", interface_type: "S/R", direction: "provided", data_type: "Resistance_KohmType" },
+	},
+	{
+		patterns: [/hv\s+bus|high\s+voltage\s+voltage/i],
+		port: { name: "HvBusVoltage", interface_type: "S/R", direction: "required", data_type: "uint16" },
+	},
+	{
+		patterns: [/insulation\s+fault/i],
+		port: { name: "InsulationFault", interface_type: "S/R", direction: "provided", data_type: "boolean" },
+	},
+	{
+		patterns: [/current\s+sensor|hall\s+sensor|shunt\s+resistor|raw\s+adc\s+current/i],
+		port: { name: "RawAdcCurrent", interface_type: "S/R", direction: "required", data_type: "Adc_VoltageType" },
+	},
+	{
+		patterns: [/current\s+sensor\s+fault|pack\s+current\s+fault/i],
+		port: { name: "CurrentSensorFault", interface_type: "S/R", direction: "provided", data_type: "boolean" },
+	},
 ]
 
 const RUNNABLE_RULES: RunnableRule[] = [
@@ -161,6 +197,10 @@ const COMPONENT_TYPE_RULES: ComponentTypeRule[] = [
 	{ patterns: [/thermal\s+manager|cooling|heating|thermal\s+runaway/i], componentType: "bms_thermal_manager" },
 	{ patterns: [/charger|charge\s+control|cc\/cv/i], componentType: "bms_charger" },
 	{ patterns: [/diagnos|dtc|dem\s+fault|fault\s+manager/i], componentType: "bms_diagnosis" },
+	{ patterns: [/state\s+(of\s+charge|of\s+health|of\s+power|of\s+energy)|\b(soc|soh|sop|soe)\b|state\s+estimat|kalman\s+filter/i], componentType: "bms_state_estimator" },
+	{ patterns: [/power\s+limit|\bsop\b|charge\s+power\s+limit|discharge\s+power\s+limit|power\s+derating/i], componentType: "bms_power_limiter" },
+	{ patterns: [/insulation\s+monitor|isolation\s+monitor|insulation\s+resistance|hv\s+isolation/i], componentType: "bms_insulation_monitor" },
+	{ patterns: [/current\s+sensor|hall\s+sensor|shunt\s+current|pack\s+current\s+measurement/i], componentType: "bms_current_sensor" },
 ]
 
 /**

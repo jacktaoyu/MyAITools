@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-06-23（第三十三次迭代 / Phase 2 领域深度：新增 BMS 领域 SWC 类型）
+
+### 新增功能
+
+- **新增 4 个 BMS 领域专用组件类型**
+  - `bms_state_estimator`：SOC / SOH / SOP / SOE 状态估计 SWC，默认端口包含 `CellVoltage`、`CellTemperature`、`PackCurrent`、`StateOfCharge`、`StateOfHealth`、`StateOfPower`、`StateOfEnergy`，Runnable `Run100ms` + `Run1s`。
+  - `bms_power_limiter`：充放电功率限制 / SOP 计算 SWC，默认端口包含 `StateOfCharge`、`StateOfHealth`、`CellTemperature`、`PackCurrent`、`ChargePowerLimit`、`DischargePowerLimit`，Runnable `Run100ms`。
+  - `bms_insulation_monitor`：HV 绝缘电阻监测 SWC，默认端口包含 `HvBusVoltage`、`InsulationResistance`、`InsulationFault`，Runnable `Run100ms`。
+  - `bms_current_sensor`：霍尔/分流电流测量 SWC，默认端口包含 `RawAdcCurrent`、`PackCurrent`、`CurrentSensorFault`，Runnable `Run10ms`。
+  - 四类类型均生成 `.h`、`.c`、`.arxml`、`_Types.arxml`，并在 C 代码中提供取值存根（getter）与 ASIL 占位注释。
+
+- **模板与数据类型扩展**
+  - `assets/bms-autosar/templates.json` 新增上述 4 套模板，新增领域数据类型 `Current_AmpType`、`Power_KwType`、`Energy_WhType`、`Resistance_KohmType`。
+  - `BmsAutosarGenerateHandler.ts` 将新类型加入 `validTypes`，并纳入生成 `.c/.h` 与 `_Types.arxml` 的分支。
+
+- **需求解析增强**
+  - `BmsAutosarRequirementParser.ts` 新增端口推断规则：`StateOfPower`、`StateOfEnergy`、`ChargePowerLimit`、`DischargePowerLimit`、`InsulationResistance`、`HvBusVoltage`、`RawAdcCurrent`、`CurrentSensorFault`。
+  - 新增组件类型推断规则：根据 `SOC/SOH/SOP/SOE/Kalman`、`power limit`、`insulation monitor`、`current sensor` 等关键词推断为新类型。
+
+- **向导与工具描述同步**
+  - `BmsAutosarWizard.tsx` 下拉框新增 4 个类型选项。
+  - `BmsAutosarWizard.presets.ts` 新增对应预设（端口、Runnable、需求、输出格式）。
+  - `bms_autosar_generate.ts` 工具描述更新枚举与说明。
+
+### 单元测试
+
+- 扩展 `BmsAutosarRequirementParser.test.ts`：覆盖新端口推断与新组件类型推断。
+- 扩展 `BmsAutosarGenerateHandler.test.ts`：覆盖 4 种新类型蓝图生成及关键端口/Runnable/类型 ARXML。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run test:unit` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`。
+
+---
+
 ## 2026-06-23（第三十二次迭代 / RAG 性能与效果升级：HNSW 向量索引 + 查询意图）
 
 ### 新增功能

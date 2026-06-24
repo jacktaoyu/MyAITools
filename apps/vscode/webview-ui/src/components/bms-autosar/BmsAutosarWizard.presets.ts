@@ -177,4 +177,82 @@ export const COMPONENT_PRESETS: Record<string, WizardPreset> = {
 		runnablesJson: JSON.stringify([{ name: "Run10ms", event: "TimingEvent", period_ms: 10 }], null, 2),
 		outputFormat: "both",
 	},
+	bms_state_estimator: {
+		componentName: "BmsStateEstimator",
+		requirements:
+			"Estimate SOC, SOH, SOP, and SOE from cell voltage, temperature, and pack current. Support Kalman filter and safe initialization.",
+		portsJson: JSON.stringify(
+			[
+				{ name: "CellVoltage", direction: "required", interface_type: "S/R", data_type: "Adc_VoltageType" },
+				{ name: "CellTemperature", direction: "required", interface_type: "S/R", data_type: "Temperature_DegCType" },
+				{ name: "PackCurrent", direction: "required", interface_type: "S/R", data_type: "Current_AmpType" },
+				{ name: "StateOfCharge", direction: "provided", interface_type: "S/R", data_type: "Percent_Type" },
+				{ name: "StateOfHealth", direction: "provided", interface_type: "S/R", data_type: "Percent_Type" },
+				{ name: "StateOfPower", direction: "provided", interface_type: "S/R", data_type: "Power_KwType" },
+				{ name: "StateOfEnergy", direction: "provided", interface_type: "S/R", data_type: "Energy_WhType" },
+			],
+			null,
+			2,
+		),
+		runnablesJson: JSON.stringify(
+			[
+				{ name: "Run100ms", event: "TimingEvent", period_ms: 100 },
+				{ name: "Run1s", event: "TimingEvent", period_ms: 1000 },
+			],
+			null,
+			2,
+		),
+		outputFormat: "both",
+	},
+	bms_power_limiter: {
+		componentName: "BmsPowerLimiter",
+		requirements:
+			"Compute allowed charge and discharge power limits from SOC, SOH, temperature, and current. Apply derating for safety.",
+		portsJson: JSON.stringify(
+			[
+				{ name: "StateOfCharge", direction: "required", interface_type: "S/R", data_type: "Percent_Type" },
+				{ name: "StateOfHealth", direction: "required", interface_type: "S/R", data_type: "Percent_Type" },
+				{ name: "CellTemperature", direction: "required", interface_type: "S/R", data_type: "Temperature_DegCType" },
+				{ name: "PackCurrent", direction: "required", interface_type: "S/R", data_type: "Current_AmpType" },
+				{ name: "ChargePowerLimit", direction: "provided", interface_type: "S/R", data_type: "Power_KwType" },
+				{ name: "DischargePowerLimit", direction: "provided", interface_type: "S/R", data_type: "Power_KwType" },
+			],
+			null,
+			2,
+		),
+		runnablesJson: JSON.stringify([{ name: "Run100ms", event: "TimingEvent", period_ms: 100 }], null, 2),
+		outputFormat: "both",
+	},
+	bms_insulation_monitor: {
+		componentName: "BmsInsulationMonitor",
+		requirements:
+			"Monitor HV bus insulation resistance and detect ground fault. Report insulation resistance and fault status.",
+		portsJson: JSON.stringify(
+			[
+				{ name: "HvBusVoltage", direction: "required", interface_type: "S/R", data_type: "uint16" },
+				{ name: "InsulationResistance", direction: "provided", interface_type: "S/R", data_type: "Resistance_KohmType" },
+				{ name: "InsulationFault", direction: "provided", interface_type: "S/R", data_type: "boolean" },
+			],
+			null,
+			2,
+		),
+		runnablesJson: JSON.stringify([{ name: "Run100ms", event: "TimingEvent", period_ms: 100 }], null, 2),
+		outputFormat: "both",
+	},
+	bms_current_sensor: {
+		componentName: "BmsCurrentSensor",
+		requirements:
+			"Measure pack current from raw ADC input (Hall or shunt). Compensate offset/gain and report current sensor fault.",
+		portsJson: JSON.stringify(
+			[
+				{ name: "RawAdcCurrent", direction: "required", interface_type: "S/R", data_type: "Adc_VoltageType" },
+				{ name: "PackCurrent", direction: "provided", interface_type: "S/R", data_type: "Current_AmpType" },
+				{ name: "CurrentSensorFault", direction: "provided", interface_type: "S/R", data_type: "boolean" },
+			],
+			null,
+			2,
+		),
+		runnablesJson: JSON.stringify([{ name: "Run10ms", event: "TimingEvent", period_ms: 10 }], null, 2),
+		outputFormat: "both",
+	},
 }
