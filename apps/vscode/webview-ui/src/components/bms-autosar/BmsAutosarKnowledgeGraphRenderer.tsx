@@ -25,26 +25,36 @@ export const TYPE_COLORS: Record<string, string> = {
 	UNKNOWN: "#808080",
 }
 
-const NODE_RADIUS = 28
+const NODE_RADIUS = 22
+const PADDING = 8
+const MAX_LABEL_LENGTH = 14
 
-function simpleForceLayout(
+function layoutGraph(
 	nodes: GraphNode[],
 	edges: BmsAutosarKnowledgeGraphEdge[],
 	width: number,
 	height: number,
-	iterations = 80,
+	iterations = 120,
 ): void {
+	if (nodes.length === 0) return
+
+	const center = { x: width / 2, y: height / 2 }
+	const area = width * height
+	const k = Math.sqrt(area / (nodes.length + 1))
+	const initialRadius = Math.min(width, height) * 0.35
+
 	nodes.forEach((node, i) => {
 		const angle = (i / nodes.length) * 2 * Math.PI
-		node.x = width / 2 + Math.cos(angle) * Math.min(width, height) * 0.25
-		node.y = height / 2 + Math.sin(angle) * Math.min(width, height) * 0.25
+		node.x = center.x + Math.cos(angle) * initialRadius
+		node.y = center.y + Math.sin(angle) * initialRadius
 		node.radius = NODE_RADIUS
 	})
 
-	const k = Math.sqrt((width * height) / (nodes.length + 1)) * 0.6
-	const center = { x: width / 2, y: height / 2 }
+	const velocities = nodes.map(() => ({ x: 0, y: 0 }))
+	let temperature = Math.min(width, height) / 12
 
 	for (let iter = 0; iter < iterations; iter++) {
+		// Repulsion
 		for (let i = 0; i < nodes.length; i++) {
 			for (let j = i + 1; j < nodes.length; j++) {
 				const a = nodes[i]
@@ -52,43 +62,90 @@ function simpleForceLayout(
 				let dx = a.x - b.x
 				let dy = a.y - b.y
 				const dist = Math.sqrt(dx * dx + dy * dy) || 1
-				if (dist < 200) {
+				if (dist < k * 2.5) {
 					const force = (k * k) / dist
 					dx = (dx / dist) * force
 					dy = (dy / dist) * force
-					a.x += dx * 0.05
-					a.y += dy * 0.05
-					b.x -= dx * 0.05
-					b.y -= dy * 0.05
+					velocities[i].x += dx * 0.08
+					velocities[i].y += dy * 0.08
+					velocities[j].x -= dx * 0.08
+					velocities[j].y -= dy * 0.08
 				}
 			}
 		}
 
+		// Attraction along edges
 		for (const edge of edges) {
-			const source = nodes.find((n) => n.id === edge.source)
-			const target = nodes.find((n) => n.id === edge.target)
-			if (!source || !target) continue
+			const sourceIndex = nodes.findIndex((n) => n.id === edge.source)
+			const targetIndex = nodes.findIndex((n) => n.id === edge.target)
+			if (sourceIndex === -1 || targetIndex === -1) continue
+			const source = nodes[sourceIndex]
+			const target = nodes[targetIndex]
 			let dx = target.x - source.x
 			let dy = target.y - source.y
 			const dist = Math.sqrt(dx * dx + dy * dy) || 1
-			const force = (dist * dist) / k
-			dx = (dx / dist) * force * 0.03
-			dy = (dy / dist) * force * 0.03
-			source.x += dx
-			source.y += dy
-			target.x -= dx
-			target.y -= dy
+			const force = (dist * dist) / k * 0.04
+			dx = (dx / dist) * force
+			dy = (dy / dist) * force
+			velocities[sourceIndex].x += dx
+			velocities[sourceIndex].y += dy
+			velocities[targetIndex].x -= dx
+			velocities[targetIndex].y -= dy
 		}
 
-		for (const node of nodes) {
-			node.x += (center.x - node.x) * 0.02
-			node.y += (center.y - node.y) * 0.02
+		// Gravity toward center
+		for (let i = 0; i < nodes.length; i++) {
+			const node = nodes[i]
+			velocities[i].x += (center.x - node.x) * 0.015
+			velocities[i].y += (center.y - node.y) * 0.015
 		}
 
+		// Apply velocities
+		for (let i = 0; i < nodes.length; i++) {
+			const node = nodes[i]
+			node.x += velocities[i].x * temperature
+			node.y += velocities[i].y * temperature
+			velocities[i].x *= 0.7
+			velocities[i].y *= 0.7
+		}
+
+		// Resolve collisions
+		for (let pass = 0; pass < 3; pass++) {
+			for (let i = 0; i < nodes.length; i++) {
+				for (let j = i + 1; j < nodes.length; j++) {
+					const a = nodes[i]
+					const b = nodes[j]
+					let dx = a.x - b.x
+					let dy = a.y - b.y
+					const dist = Math.sqrt(dx * dx + dy * dy) || 0
+					const minDist = a.radius + b.radius + PADDING
+					if (dist < minDist) {
+						let nx = 0
+						let ny = 0
+						if (dist === 0) {
+							nx = 1
+							ny = 0
+						} else {
+							nx = dx / dist
+							ny = dy / dist
+						}
+						const overlap = (minDist - dist) / 2 + 0.5
+						a.x += nx * overlap
+						a.y += ny * overlap
+						b.x -= nx * overlap
+						b.y -= ny * overlap
+					}
+				}
+			}
+		}
+
+		// Keep inside bounds
 		for (const node of nodes) {
 			node.x = Math.max(node.radius, Math.min(width - node.radius, node.x))
 			node.y = Math.max(node.radius, Math.min(height - node.radius, node.y))
 		}
+
+		temperature *= 0.96
 	}
 }
 
@@ -147,6 +204,16 @@ function downloadBlob(content: string, filename: string, type: string): void {
 	URL.revokeObjectURL(url)
 }
 
+interface Transform {
+	x: number
+	y: number
+	k: number
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.max(min, Math.min(max, value))
+}
+
 export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraphRendererProps> = ({
 	nodes,
 	edges,
@@ -158,12 +225,15 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 }) => {
 	const svgRef = useRef<SVGSVGElement>(null)
 	const [selectedNode, setSelectedNode] = useState<string | null>(null)
+	const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, k: 1 })
+	const [dragging, setDragging] = useState(false)
+	const dragStartRef = useRef<{ x: number; y: number } | null>(null)
 	const { showNotice, noticeElement } = useBmsAutosarNotice(2000)
 
 	const layoutedNodes = useMemo(() => {
 		if (nodes.length === 0) return []
 		const graphNodes = nodes.map((n) => ({ ...n, x: 0, y: 0, radius: NODE_RADIUS }))
-		simpleForceLayout(graphNodes, edges, width, height)
+		layoutGraph(graphNodes, edges, width, height)
 		return graphNodes
 	}, [nodes, edges, width, height])
 
@@ -174,6 +244,54 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 
 	const nodeIds = useMemo(() => new Set(layoutedNodes.map((n) => n.id)), [layoutedNodes])
 	const visibleEdges = filteredEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
+
+	const handleZoom = (scaleFactor: number, centerX?: number, centerY?: number) => {
+		setTransform((prev) => {
+			const newK = clamp(prev.k * scaleFactor, 0.25, 4)
+			if (newK === prev.k) return prev
+			const cx = centerX ?? width / 2
+			const cy = centerY ?? height / 2
+			const wx = (cx - prev.x) / prev.k
+			const wy = (cy - prev.y) / prev.k
+			return {
+				k: newK,
+				x: cx - wx * newK,
+				y: cy - wy * newK,
+			}
+		})
+	}
+
+	const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
+		event.preventDefault()
+		const svg = svgRef.current
+		if (!svg) return
+		const point = svg.createSVGPoint()
+		point.x = event.clientX
+		point.y = event.clientY
+		const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse())
+		const scaleFactor = event.deltaY < 0 ? 1.15 : 0.87
+		handleZoom(scaleFactor, svgPoint.x, svgPoint.y)
+	}
+
+	const handleMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
+		if (event.button !== 0) return
+		setDragging(true)
+		dragStartRef.current = { x: event.clientX - transform.x, y: event.clientY - transform.y }
+	}
+
+	const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+		if (!dragging || !dragStartRef.current) return
+		setTransform((prev) => ({
+			...prev,
+			x: event.clientX - dragStartRef.current!.x,
+			y: event.clientY - dragStartRef.current!.y,
+		}))
+	}
+
+	const handleMouseUp = () => {
+		setDragging(false)
+		dragStartRef.current = null
+	}
 
 	const handleExportSvg = () => {
 		const svg = svgRef.current
@@ -193,6 +311,8 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		}
 	}
 
+	const resetView = () => setTransform({ x: 0, y: 0, k: 1 })
+
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -208,6 +328,15 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 					type="button">
 					All edges
 				</button>
+				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={() => handleZoom(1.2)}>
+					<i className="codicon codicon-zoom-in" style={{ fontSize: "12.5px" }} />
+				</VSCodeButton>
+				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={() => handleZoom(0.83)}>
+					<i className="codicon codicon-zoom-out" style={{ fontSize: "12.5px" }} />
+				</VSCodeButton>
+				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={resetView}>
+					<i className="codicon codicon-screen-normal" style={{ fontSize: "12.5px" }} />
+				</VSCodeButton>
 				<VSCodeButton appearance="secondary" disabled={nodes.length === 0} onClick={handleExportMermaid}>
 					Export Mermaid
 				</VSCodeButton>
@@ -223,64 +352,81 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				) : layoutedNodes.length === 0 ? (
 					<div className="text-sm text-description py-4 text-center">{emptyMessage}</div>
 				) : (
-					<svg aria-label="ARXML knowledge graph" height={height} ref={svgRef} role="img" width={width}>
+					<svg
+						aria-label="ARXML knowledge graph"
+						className={dragging ? "cursor-grabbing" : "cursor-grab"}
+						height={height}
+						onMouseDown={handleMouseDown}
+						onMouseLeave={handleMouseUp}
+						onMouseMove={handleMouseMove}
+						onMouseUp={handleMouseUp}
+						onWheel={handleWheel}
+						ref={svgRef}
+						role="img"
+						width={width}>
 						<title>ARXML knowledge graph</title>
-						{visibleEdges.map((edge, i) => {
-							const source = layoutedNodes.find((n) => n.id === edge.source)
-							const target = layoutedNodes.find((n) => n.id === edge.target)
-							if (!source || !target) return null
-							return (
-								<line
-									key={`${edge.source}-${edge.target}-${i}`}
-									stroke="var(--vscode-panel-border)"
-									strokeWidth={1}
-									x1={source.x}
-									x2={target.x}
-									y1={source.y}
-									y2={target.y}
-								/>
-							)
-						})}
-						{layoutedNodes.map((node) => (
-							// biome-ignore lint/a11y/useSemanticElements: SVG node group cannot be a <button>
-							<g
-								aria-label={`${node.type} ${node.name}`}
-								className="cursor-pointer"
-								key={node.id}
-								onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
-								onKeyDown={(event) => {
-									if (event.key === "Enter" || event.key === " ") {
-										setSelectedNode(selectedNode === node.id ? null : node.id)
-									}
-								}}
-								role="button"
-								tabIndex={0}
-								transform={`translate(${node.x}, ${node.y})`}>
-								<circle
-									fill={TYPE_COLORS[node.type] || TYPE_COLORS.UNKNOWN}
-									r={node.radius}
-									stroke={selectedNode === node.id ? "var(--vscode-button-background)" : "transparent"}
-									strokeWidth={3}
-								/>
-								<text
-									className="text-[10px] fill-white pointer-events-none"
-									dy="0.35em"
-									style={{ fontFamily: "var(--vscode-font-family)" }}
-									textAnchor="middle">
-									{node.name.length > 10 ? `${node.name.slice(0, 9)}…` : node.name}
-								</text>
-								<title>{`${node.type}: ${node.path}`}</title>
-							</g>
-						))}
+						<g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
+							{visibleEdges.map((edge, i) => {
+								const source = layoutedNodes.find((n) => n.id === edge.source)
+								const target = layoutedNodes.find((n) => n.id === edge.target)
+								if (!source || !target) return null
+								return (
+									<line
+										key={`${edge.source}-${edge.target}-${i}`}
+										stroke="var(--vscode-panel-border)"
+										strokeWidth={1}
+										x1={source.x}
+										x2={target.x}
+										y1={source.y}
+										y2={target.y}
+									/>
+								)
+							})}
+							{layoutedNodes.map((node) => (
+								// biome-ignore lint/a11y/useSemanticElements: SVG node group cannot be a <button>
+								<g
+									aria-label={`${node.type} ${node.name}`}
+									className="cursor-pointer"
+									key={node.id}
+									onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
+									onKeyDown={(event) => {
+										if (event.key === "Enter" || event.key === " ") {
+											setSelectedNode(selectedNode === node.id ? null : node.id)
+										}
+									}}
+									role="button"
+									tabIndex={0}
+									transform={`translate(${node.x}, ${node.y})`}>
+									<circle
+										fill={TYPE_COLORS[node.type] || TYPE_COLORS.UNKNOWN}
+										r={node.radius}
+										stroke={selectedNode === node.id ? "var(--vscode-button-background)" : "transparent"}
+										strokeWidth={3}
+									/>
+									<text
+										className="fill-[var(--vscode-foreground)] pointer-events-none"
+										dy={node.radius + 12}
+										style={{ fontFamily: "var(--vscode-font-family)", fontSize: "9px" }}
+										textAnchor="middle">
+										{node.name.length > MAX_LABEL_LENGTH
+											? `${node.name.slice(0, MAX_LABEL_LENGTH - 1)}…`
+											: node.name}
+									</text>
+									<title>{`${node.type}: ${node.path}`}</title>
+								</g>
+							))}
+						</g>
 					</svg>
 				)}
 			</div>
-			selectedNode && (
-			<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)]">
-				Selected: {layoutedNodes.find((n) => n.id === selectedNode)?.path}
-			</div>
-			)
+			{selectedNode && (
+				<div className="mt-2 text-xs text-[var(--vscode-descriptionForeground)]">
+					Selected: {layoutedNodes.find((n) => n.id === selectedNode)?.path}
+				</div>
+			)}
 			{noticeElement}
 		</div>
 	)
 }
+
+export default BmsAutosarKnowledgeGraphRenderer

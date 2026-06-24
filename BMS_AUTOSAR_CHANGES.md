@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-06-23（第三十六次迭代 / 知识图谱布局优化：防重叠、缩放、平移）
+
+### 新增功能
+
+- **ARXML 知识图谱布局与交互优化**
+  - 重写 `BmsAutosarKnowledgeGraphRenderer.tsx` 的力导向布局：引入节点碰撞检测与多轮碰撞消解，显著减少节点堆叠。
+  - 节点半径由 28 调整为 22，节点间距加入 8px padding，初始分布半径增大，使整体更分散。
+  - 新增 **滚轮缩放** 与 **拖拽平移**，支持在密集图中聚焦查看局部。
+  - 新增缩放控制按钮：Zoom In / Zoom Out / Reset View（居中并恢复 1:1）。
+  - 节点标签从圆心内部移至节点下方，使用 9px 字体并截断为 14 个字符，避免标签互相覆盖。
+  - 修复原 `selectedNode && (...)` 缺少 JSX 花括号的语法问题。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run lint:proto` 全部通过。
+- `NODE_OPTIONS=--no-experimental-strip-types npm run test:unit` 共 **1716** 项通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（9.1 MB）。
+
+---
+
 ## 2026-06-23（第三十五次迭代 / Phase 4 Webview UX：统一仪表盘与轻量优化）
 
 ### 新增功能
