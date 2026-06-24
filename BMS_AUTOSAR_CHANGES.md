@@ -4,6 +4,46 @@
 
 ---
 
+## 2026-06-23（第三十四次迭代 / Phase 3 质量闭环：抑制注释、修复后重验、Category 过滤）
+
+### 新增功能
+
+- **质量门抑制注释**
+  - 新增 `src/core/task/tools/utils/BmsAutosarQualitySuppressions.ts`。
+  - 支持 C/C++ 行尾/单行注释形式的规则抑制：
+    - `// bms-qg-disable-line R21.3` — 抑制当前行。
+    - `// bms-qg-disable-next-line R21.3` — 抑制下一行。
+    - `// bms-qg-disable R21.3` / `// bms-qg-enable R21.3` — 块级开关。
+    - `// bms-qg-disable all` / `// bms-qg-enable all` — 全部规则开关。
+  - 规则 ID 大小写不敏感，支持逗号分隔多个规则。
+  - `runBmsAutosarQualityGates()` 在汇总 issue 后应用抑制过滤，被抑制的 issue 不再进入质量报告。
+
+- **Issue 元数据透传**
+  - `ValidationIssue` 新增 `rule` 与 `line` 字段。
+  - `BmsAutosarQualityGates.ts` 的 `mapMisraIssues` / `mapAsilIssues` 现在保留原始 `rule` 与 `line`，使质量报告能显示规则编号与行号。
+
+- **LLM 自动修复后重验**
+  - `proto/cline/file.proto`：`AutoFixBmsAutosarFileResponse` 新增 `repeated BmsAutosarQualityIssue remaining_issues`。
+  - `autoFixBmsAutosarFile.ts` / `autoFixBmsAutosarFiles.ts` 在生成/应用修复后，对 `fixedContent` 重新运行 `runBmsAutosarQualityGates()`，返回残余问题。
+  - 前端可在预览/应用后查看哪些 issue 仍未解决，形成“修复 → 重验”闭环。
+
+- **质量报告 UI 补全**
+  - `BmsAutosarQualityReportView.tsx` 补齐 Category 过滤按钮（All / MISRA / ASIL / STRUCTURAL / COMPILE），与 `BmsAutosarQualityPanel.tsx` 保持一致。
+  - 修复 `BmsAutosarQualityPanel.tsx` 中 issue 列表未按 Category 过滤的问题。
+
+### 单元测试
+
+- 新增 `BmsAutosarQualitySuppressions.test.ts`：覆盖 disable-line、disable-next-line、块级开关、all、大小写、多规则。
+- 扩展 `BmsAutosarQualityGates.test.ts`：覆盖 rule/line 保留与三种抑制注释场景。
+- 全量单元测试通过：`npm run test:unit` 共 **1716** 项通过。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run lint:proto` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（9.1 MB）。
+
+---
+
 ## 2026-06-23（第三十三次迭代 / Phase 2 领域深度：新增 BMS 领域 SWC 类型）
 
 ### 新增功能

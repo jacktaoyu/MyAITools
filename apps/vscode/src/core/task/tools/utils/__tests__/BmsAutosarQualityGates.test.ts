@@ -159,5 +159,35 @@ describe("BmsAutosarQualityGates", () => {
 			// may produce warnings for this minimal snippet, which is expected.
 			assert.ok(!hasCompileError || hasNoCompiler)
 		})
+
+		it("preserves rule and line in validation issues", async () => {
+			const cSource = `void BmsTest_Run(void)\n{\n    malloc(1);\n}\n`
+			const result = await runBmsAutosarQualityGates("BmsTest.c", cSource)
+			const mallocIssue = result.issues.find((i) => i.rule === "R21.3")
+			assert.ok(mallocIssue)
+			assert.equal(mallocIssue?.line, 3)
+			assert.equal(mallocIssue?.category, "MISRA")
+		})
+
+		it("respects bms-qg-disable-line suppression comments", async () => {
+			const cSource = `void BmsTest_Run(void)\n{\n    malloc(1); // bms-qg-disable-line R21.3\n}\n`
+			const result = await runBmsAutosarQualityGates("BmsTest.c", cSource)
+			assert.ok(!result.issues.some((i) => i.rule === "R21.3"))
+		})
+
+		it("respects bms-qg-disable-next-line suppression comments", async () => {
+			const cSource = `void BmsTest_Run(void)\n{\n    // bms-qg-disable-next-line R21.3\n    malloc(1);\n}\n`
+			const result = await runBmsAutosarQualityGates("BmsTest.c", cSource)
+			assert.ok(!result.issues.some((i) => i.rule === "R21.3"))
+		})
+
+		it("respects block suppression comments", async () => {
+			const cSource = `// bms-qg-disable R21.3\nvoid BmsTest_Run(void) { malloc(1); }\n// bms-qg-enable R21.3\nvoid BmsTest_Init(void) { malloc(1); }\n`
+			const result = await runBmsAutosarQualityGates("BmsTest.c", cSource)
+			const suppressedLines = result.issues
+				.filter((i) => i.rule === "R21.3")
+				.map((i) => i.line)
+			assert.deepStrictEqual(suppressedLines, [4])
+		})
 	})
 })

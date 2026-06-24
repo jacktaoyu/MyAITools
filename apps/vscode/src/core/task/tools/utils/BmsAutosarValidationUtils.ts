@@ -4,6 +4,15 @@ export interface ValidationIssue {
 	severity: "error" | "warning" | "info"
 	message: string
 	category?: "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
+	/**
+	 * Rule identifier, e.g. "R21.3" or "SAFETY-EXIT". Used for suppression
+	 * comments and to populate the quality report.
+	 */
+	rule?: string
+	/**
+	 * 1-based line number where the issue was detected, if available.
+	 */
+	line?: number
 }
 
 export interface ValidationResult {

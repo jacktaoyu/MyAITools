@@ -215,7 +215,7 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 										</div>
 										<ul className="mt-1 space-y-0.5">
 											{file.issues
-												.filter((issue) => (selectedSeverity === "all" ? true : issue.severity === selectedSeverity))
+												.filter(matchesFilters)
 												.map((issue, issueIndex) => (
 													<li
 														key={issueIndex}

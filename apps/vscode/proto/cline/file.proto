@@ -578,6 +578,7 @@ message AutoFixBmsAutosarFileResponse {
   string fixed_content = 5; // Fixed file content
   string diff = 6; // Unified diff between original and fixed content
   string message = 7; // Human-readable status message
+  repeated BmsAutosarQualityIssue remaining_issues = 8; // Quality issues still present after the fix
 }
 
 // Request to auto-fix multiple BMS AUTOSAR generated files using the configured LLM.

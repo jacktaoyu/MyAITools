@@ -13,6 +13,7 @@ import { upsertQualityReportFile } from "../handlers/bms-autosar/BmsAutosarQuali
 import type { QualityReportIssue } from "../handlers/bms-autosar/BmsAutosarQualityReportStore"
 import { validateArxml, validateCHeader, validateCSource } from "./BmsAutosarValidationUtils"
 import type { ValidationIssue, ValidationResult } from "./BmsAutosarValidationUtils"
+import { parseQualitySuppressions } from "./BmsAutosarQualitySuppressions"
 
 const execFileAsync = promisify(execFile)
 
@@ -319,19 +320,24 @@ export async function runBmsAutosarQualityGates(
 		issues.push(...addCategory(compileResult.issues, "COMPILE"))
 	}
 
+	const suppressions = parseQualitySuppressions(content)
+	const filteredIssues = issues.filter((issue) => !issue.rule || !suppressions.isSuppressed(issue.rule, issue.line))
+
 	if (options.cwd) {
 		upsertQualityReportFile(
 			options.cwd,
 			relPath,
-			issues.map((issue) => ({
+			filteredIssues.map((issue) => ({
 				severity: issue.severity,
 				message: issue.message,
 				category: issue.category,
+				rule: issue.rule,
+				line: issue.line,
 			})) as QualityReportIssue[],
 		)
 	}
 
-	return { issues }
+	return { issues: filteredIssues }
 }
 
 function mapMisraIssues(misraIssues: MisraIssue[]): ValidationIssue[] {
@@ -339,6 +345,8 @@ function mapMisraIssues(misraIssues: MisraIssue[]): ValidationIssue[] {
 		severity: issue.severity,
 		message: `[MISRA ${issue.rule}] ${issue.message}${issue.line ? ` (line ${issue.line})` : ""}`,
 		category: "MISRA" as const,
+		rule: issue.rule,
+		line: issue.line,
 	}))
 }
 
@@ -347,6 +355,8 @@ function mapAsilIssues(asilIssues: AsilSafetyIssue[]): ValidationIssue[] {
 		severity: issue.severity,
 		message: `[ASIL ${issue.rule}] ${issue.message}${issue.line ? ` (line ${issue.line})` : ""}`,
 		category: "ASIL" as const,
+		rule: issue.rule,
+		line: issue.line,
 	}))
 }
 

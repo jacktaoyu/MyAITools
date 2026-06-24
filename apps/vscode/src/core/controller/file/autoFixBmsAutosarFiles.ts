@@ -7,8 +7,11 @@ import {
 	AutoFixBmsAutosarFileResponse,
 	AutoFixBmsAutosarFilesRequest,
 	AutoFixBmsAutosarFilesResponse,
+	BmsAutosarQualityIssue,
 } from "@shared/proto/cline/file";
 import { autoFixBmsAutosarFile as runBmsAutosarAutoFix } from "@core/task/tools/handlers/bms-autosar/BmsAutosarAutoFixer";
+import { runBmsAutosarQualityGates } from "@core/task/tools/utils/BmsAutosarQualityGates";
+import type { ValidationIssue } from "@core/task/tools/utils/BmsAutosarValidationUtils";
 import { getCwd, getDesktopDir } from "@utils/path";
 import type { Controller } from "..";
 
@@ -80,6 +83,15 @@ export async function autoFixBmsAutosarFiles(
 					fixedCount++;
 				}
 
+				const remainingResult = await runBmsAutosarQualityGates(
+					relPath,
+					result.fixedContent,
+					{ cwd },
+				);
+				const remainingIssues = remainingResult.issues.map((issue) =>
+					mapValidationIssueToProto(issue),
+				);
+
 				results.push(
 					AutoFixBmsAutosarFileResponse.create({
 						fixed: result.fixed,
@@ -89,6 +101,7 @@ export async function autoFixBmsAutosarFiles(
 						fixedContent: result.fixedContent,
 						diff,
 						message: result.message,
+						remainingIssues,
 					}),
 				);
 			} catch (error: any) {
@@ -122,4 +135,16 @@ export async function autoFixBmsAutosarFiles(
 			message: `Batch auto-fix failed: ${error?.message || error}`,
 		});
 	}
+}
+
+function mapValidationIssueToProto(
+	issue: ValidationIssue,
+): BmsAutosarQualityIssue {
+	return BmsAutosarQualityIssue.create({
+		severity: issue.severity,
+		message: issue.message,
+		line: issue.line ?? 0,
+		rule: issue.rule ?? "",
+		category: issue.category ?? "",
+	});
 }

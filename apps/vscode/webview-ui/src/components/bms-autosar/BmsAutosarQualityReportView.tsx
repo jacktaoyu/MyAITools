@@ -20,7 +20,7 @@ type Severity = "error" | "warning" | "info"
 type Category = "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
 
 const severityOrder: Severity[] = ["error", "warning", "info"]
-const _categories: Category[] = ["MISRA", "ASIL", "STRUCTURAL", "COMPILE"]
+const categories: Category[] = ["MISRA", "ASIL", "STRUCTURAL", "COMPILE"]
 
 const severityIcon = (severity: Severity) => {
 	switch (severity) {
@@ -50,7 +50,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 	const [loading, setLoading] = useState(false)
 	const [fixingFile, setFixingFile] = useState<string | null>(null)
 	const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
-	const [selectedCategory, _setSelectedCategory] = useState<Category | "all">("all")
+	const [selectedCategory, setSelectedCategory] = useState<Category | "all">("all")
 	const [preview, setPreview] = useState<AutoFixBmsAutosarFileResponse | null>(null)
 	const [batchPreview, setBatchPreview] = useState<AutoFixBmsAutosarFilesResponse | null>(null)
 	const [batchFixing, setBatchFixing] = useState(false)
@@ -190,6 +190,20 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 							onClick={() => setSelectedSeverity(sev)}
 							type="button">
 							{sev === "all" ? "All" : `${severityIcon(sev as Severity)} ${sev}`}
+						</button>
+					))}
+					<div className="w-px h-4 bg-[var(--vscode-panel-border)] mx-1" />
+					{(["all", ...categories] as const).map((cat) => (
+						<button
+							className={`text-xs px-2 py-1 rounded border ${
+								selectedCategory === cat
+									? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-transparent"
+									: "bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]"
+							}`}
+							key={cat}
+							onClick={() => setSelectedCategory(cat)}
+							type="button">
+							{cat === "all" ? "All" : cat}
 						</button>
 					))}
 					<div className="flex-1" />

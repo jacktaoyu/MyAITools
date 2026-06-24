@@ -5,8 +5,11 @@ import { formatResponse } from "@core/prompts/responses";
 import {
 	AutoFixBmsAutosarFileRequest,
 	AutoFixBmsAutosarFileResponse,
+	BmsAutosarQualityIssue,
 } from "@shared/proto/cline/file";
 import { autoFixBmsAutosarFile as runBmsAutosarAutoFix } from "@core/task/tools/handlers/bms-autosar/BmsAutosarAutoFixer";
+import { runBmsAutosarQualityGates } from "@core/task/tools/utils/BmsAutosarQualityGates";
+import type { ValidationIssue } from "@core/task/tools/utils/BmsAutosarValidationUtils";
 import { getCwd, getDesktopDir } from "@utils/path";
 import type { Controller } from "..";
 
@@ -57,6 +60,15 @@ export async function autoFixBmsAutosarFile(
 			applied = true;
 		}
 
+		const remainingResult = await runBmsAutosarQualityGates(
+			relPath,
+			result.fixedContent,
+			{ cwd },
+		);
+		const remainingIssues = remainingResult.issues.map((issue) =>
+			mapValidationIssueToProto(issue),
+		);
+
 		return AutoFixBmsAutosarFileResponse.create({
 			fixed: result.fixed,
 			applied,
@@ -65,6 +77,7 @@ export async function autoFixBmsAutosarFile(
 			fixedContent: result.fixedContent,
 			diff,
 			message: result.message,
+			remainingIssues,
 		});
 	} catch (error: any) {
 		return AutoFixBmsAutosarFileResponse.create({
@@ -74,4 +87,16 @@ export async function autoFixBmsAutosarFile(
 			message: `Auto-fix failed for ${relPath}: ${error?.message || error}`,
 		});
 	}
+}
+
+function mapValidationIssueToProto(
+	issue: ValidationIssue,
+): BmsAutosarQualityIssue {
+	return BmsAutosarQualityIssue.create({
+		severity: issue.severity,
+		message: issue.message,
+		line: issue.line ?? 0,
+		rule: issue.rule ?? "",
+		category: issue.category ?? "",
+	});
 }
