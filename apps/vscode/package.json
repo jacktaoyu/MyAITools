@@ -48,6 +48,7 @@
 		"onCommand:cline.bmsAutosarGenerate",
 		"onCommand:cline.bmsAutosarQualityReport",
 		"onCommand:cline.bmsAutosarKnowledgeGraph",
+		"onCommand:cline.bmsAutosarDashboard",
 		"onCommand:cline.bmsAutosar.openCompile",
 		"onCommand:cline.bmsAutosar.openGenerator",
 		"onUri",

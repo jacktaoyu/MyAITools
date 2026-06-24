@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { HierarchicalNSW } from "hnswlib-node"
+import type { HierarchicalNSW as HnswClass } from "hnswlib-node"
 import { getClineHomePath } from "@/core/storage/disk"
 import { fileExistsAtPath } from "@utils/fs"
 import type { ApiConfiguration } from "@shared/api"
@@ -80,8 +80,17 @@ async function getEntryVectors(
 	return results.sort((a, b) => a.entryIndex - b.entryIndex)
 }
 
+let hnswLibPromise: Promise<{ HierarchicalNSW: typeof HnswClass }> | undefined
+
+async function loadHnswLib(): Promise<{ HierarchicalNSW: typeof HnswClass }> {
+	if (!hnswLibPromise) {
+		hnswLibPromise = import("hnswlib-node") as Promise<{ HierarchicalNSW: typeof HnswClass }>
+	}
+	return hnswLibPromise
+}
+
 export class BmsAutosarVectorIndex {
-	private index?: HierarchicalNSW
+	private index?: HnswClass
 	private manifest?: VectorIndexManifest
 	private entriesHash?: string
 	private readonly indexPath: string
@@ -118,6 +127,7 @@ export class BmsAutosarVectorIndex {
 		}
 
 		const dimensions = vectors[0].vector.length
+		const { HierarchicalNSW } = await loadHnswLib()
 		const index = new HierarchicalNSW("cosine", dimensions)
 		const maxElements = Math.max(entries.length, 16)
 		index.initIndex(maxElements, 16, 200, 100)
@@ -155,6 +165,7 @@ export class BmsAutosarVectorIndex {
 			return false
 		}
 
+		const { HierarchicalNSW } = await loadHnswLib()
 		const index = new HierarchicalNSW("cosine", manifest.dimensions)
 		index.readIndexSync(this.indexPath)
 		this.manifest = manifest
