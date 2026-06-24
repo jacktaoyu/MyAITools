@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-06-23（第三十五次迭代 / Phase 4 Webview UX：统一仪表盘与轻量优化）
+
+### 新增功能
+
+- **BMS AUTOSAR 统一仪表盘（Dashboard）**
+  - 新增 `webview-ui/src/components/bms-autosar/BmsAutosarDashboard.tsx`：全页面一站式入口，展示快速操作卡片与实时指标。
+  - 快速操作：Generator、Knowledge、Compile、Quality Report、Knowledge Graph。
+  - 实时指标：质量报告 errors / warnings、Knowledge Entries 数量、Compile Profiles 数量与最后选中配置、Component Templates 数量。
+  - 最近问题区：列出质量报告前 5 个文件及 issue 概览，支持一键刷新。
+
+- **导航与命令集成**
+  - `proto/cline/ui.proto` 新增 `subscribeToBmsAutosarDashboard` gRPC 流，用于从扩展命令打开仪表盘。
+  - `src/core/controller/ui/subscribeToBmsAutosarDashboard.ts` 实现事件订阅与发送。
+  - `src/registry.ts` 与 `src/extension.ts` 注册新命令 `cline.bmsAutosarDashboard`，`package.json` 添加对应命令声明。
+  - `ExtensionStateContext` 新增 `showBmsAutosarDashboard` 状态、`navigateToBmsAutosarDashboard()` / `hideBmsAutosarDashboard()`，并在其他全屏视图打开时自动关闭仪表盘。
+  - `App.tsx` 懒加载并渲染 `BmsAutosarDashboard`。
+  - `ChatTextArea.tsx` 的 BMS AUTOSAR 下拉菜单新增 Dashboard 选项。
+
+- **Toast 通知替换原生 alert**
+  - 新增 `webview-ui/src/components/bms-autosar/useBmsAutosarNotice.tsx` 共享 hook，提供 success / error 两种类型的底部浮层提示。
+  - `BmsAutosarQualityReportView.tsx` 与 `BmsAutosarQualityPanel.tsx` 的 auto-fix / apply-fix / batch-fix 成功与失败提示改为 toast。
+  - `BmsAutosarKnowledgeGraphRenderer.tsx` 的 "Mermaid copied" 提示改为 toast。
+
+### 单元测试
+
+- 全量单元测试通过：`npm run test:unit` 共 **1716** 项通过（未新增失败）。
+
+### 构建验证
+
+- `npm run check-types`、`npm run lint`、`npm run lint:proto` 全部通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（9.1 MB）。
+
+---
+
 ## 2026-06-23（第三十四次迭代 / Phase 3 质量闭环：抑制注释、修复后重验、Category 过滤）
 
 ### 新增功能

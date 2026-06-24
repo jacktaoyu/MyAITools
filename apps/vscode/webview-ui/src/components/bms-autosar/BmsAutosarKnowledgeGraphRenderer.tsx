@@ -1,6 +1,7 @@
 import { BmsAutosarKnowledgeGraphEdge, BmsAutosarKnowledgeGraphNode } from "@shared/proto/cline/file"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useMemo, useRef, useState } from "react"
+import { useBmsAutosarNotice } from "./useBmsAutosarNotice"
 
 interface GraphNode extends BmsAutosarKnowledgeGraphNode {
 	x: number
@@ -157,6 +158,7 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 }) => {
 	const svgRef = useRef<SVGSVGElement>(null)
 	const [selectedNode, setSelectedNode] = useState<string | null>(null)
+	const { showNotice, noticeElement } = useBmsAutosarNotice(2000)
 
 	const layoutedNodes = useMemo(() => {
 		if (nodes.length === 0) return []
@@ -185,8 +187,7 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		const mermaid = generateMermaid({ nodes, edges })
 		try {
 			await navigator.clipboard.writeText(mermaid)
-			// eslint-disable-next-line no-alert
-			alert("Mermaid definition copied to clipboard.")
+			showNotice("Mermaid definition copied to clipboard.", "success")
 		} catch {
 			downloadBlob(mermaid, "arxml-knowledge-graph.mmd", "text/plain;charset=utf-8")
 		}
@@ -279,6 +280,7 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				Selected: {layoutedNodes.find((n) => n.id === selectedNode)?.path}
 			</div>
 			)
+			{noticeElement}
 		</div>
 	)
 }

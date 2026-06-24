@@ -9,6 +9,7 @@ import SettingsView from "./components/settings/SettingsView"
 const BmsAutosarWizard = lazy(() => import("./components/bms-autosar/BmsAutosarWizard"))
 const BmsAutosarQualityReportView = lazy(() => import("./components/bms-autosar/BmsAutosarQualityReportView"))
 const BmsAutosarKnowledgeGraphView = lazy(() => import("./components/bms-autosar/BmsAutosarKnowledgeGraphView"))
+const BmsAutosarDashboard = lazy(() => import("./components/bms-autosar/BmsAutosarDashboard"))
 import WorktreesView from "./components/worktrees/WorktreesView"
 import { useClineAuth } from "./context/ClineAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
@@ -30,6 +31,7 @@ const AppContent = () => {
 		showBmsAutosarWizard,
 		showBmsAutosarQualityReport,
 		showBmsAutosarKnowledgeGraph,
+		showBmsAutosarDashboard,
 		showAnnouncement,
 		setShowAnnouncement,
 		setShouldShowAnnouncement,
@@ -42,6 +44,7 @@ const AppContent = () => {
 		hideBmsAutosarWizard,
 		hideBmsAutosarQualityReport,
 		hideBmsAutosarKnowledgeGraph,
+		hideBmsAutosarDashboard,
 		hideAnnouncement,
 	} = useExtensionState()
 
@@ -102,6 +105,11 @@ const AppContent = () => {
 					<BmsAutosarKnowledgeGraphView onDone={hideBmsAutosarKnowledgeGraph} />
 				</Suspense>
 			)}
+			{showBmsAutosarDashboard && (
+				<Suspense fallback={null}>
+					<BmsAutosarDashboard onDone={hideBmsAutosarDashboard} />
+				</Suspense>
+			)}
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
@@ -113,7 +121,8 @@ const AppContent = () => {
 					showWorktrees ||
 					showBmsAutosarWizard ||
 					showBmsAutosarQualityReport ||
-					showBmsAutosarKnowledgeGraph
+					showBmsAutosarKnowledgeGraph ||
+					showBmsAutosarDashboard
 				}
 				showAnnouncement={showAnnouncement}
 				showHistoryView={navigateToHistory}

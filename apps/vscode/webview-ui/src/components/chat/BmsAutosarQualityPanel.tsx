@@ -12,6 +12,7 @@ import { StringRequest } from "@shared/proto/cline/common"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FileServiceClient } from "@/services/grpc-client"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useBmsAutosarNotice } from "@/components/bms-autosar/useBmsAutosarNotice"
 
 type Severity = "error" | "warning" | "info"
 type Category = "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
@@ -49,6 +50,7 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 	const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
 	const [selectedCategory, setSelectedCategory] = useState<Category | "all">("all")
 	const [preview, setPreview] = useState<AutoFixBmsAutosarFileResponse | null>(null)
+	const { showNotice, noticeElement } = useBmsAutosarNotice(4000)
 
 	const fetchReport = useCallback(async () => {
 		setLoading(true)
@@ -87,8 +89,7 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 			setPreview(response)
 		} catch (error: any) {
 			console.error("Auto-fix failed:", error)
-			// eslint-disable-next-line no-alert
-			alert(`Auto-fix failed: ${error?.message || error}`)
+			showNotice(`Auto-fix failed: ${error?.message || error}`, "error")
 		} finally {
 			setFixingFile(null)
 		}
@@ -105,12 +106,10 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 			)
 			setPreview(null)
 			await fetchReport()
-			// eslint-disable-next-line no-alert
-			alert(response.message)
+			showNotice(response.message, "success")
 		} catch (error: any) {
 			console.error("Apply fix failed:", error)
-			// eslint-disable-next-line no-alert
-			alert(`Apply fix failed: ${error?.message || error}`)
+			showNotice(`Apply fix failed: ${error?.message || error}`, "error")
 		} finally {
 			setFixingFile(null)
 		}
@@ -271,6 +270,7 @@ export const BmsAutosarQualityPanel: React.FC = () => {
 					)}
 				</DialogContent>
 			</Dialog>
+			{noticeElement}
 		</>
 	)
 }

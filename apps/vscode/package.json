@@ -269,6 +269,12 @@
 				"icon": "$(sparkle)"
 			},
 			{
+				"command": "cline.bmsAutosarDashboard",
+				"title": "Open BMS AUTOSAR Dashboard",
+				"category": "Cline",
+				"icon": "$(dashboard)"
+			},
+			{
 				"command": "cline.reviewComment.reply",
 				"title": "Reply",
 				"category": "Cline",

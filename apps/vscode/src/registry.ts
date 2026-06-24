@@ -31,6 +31,7 @@ const ClineCommands = {
 	BmsAutosarOpenCompile: prefix + ".bmsAutosar.openCompile",
 	BmsAutosarQualityReport: prefix + ".bmsAutosarQualityReport",
 	BmsAutosarKnowledgeGraph: prefix + ".bmsAutosarKnowledgeGraph",
+	BmsAutosarDashboard: prefix + ".bmsAutosarDashboard",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

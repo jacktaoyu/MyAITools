@@ -15,6 +15,7 @@ import ViewHeader from "@/components/common/ViewHeader"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient } from "@/services/grpc-client"
 import { getErrorMessage } from "./BmsAutosarWizard.utils"
+import { useBmsAutosarNotice } from "./useBmsAutosarNotice"
 
 type Severity = "error" | "warning" | "info"
 type Category = "MISRA" | "ASIL" | "STRUCTURAL" | "COMPILE"
@@ -54,6 +55,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 	const [preview, setPreview] = useState<AutoFixBmsAutosarFileResponse | null>(null)
 	const [batchPreview, setBatchPreview] = useState<AutoFixBmsAutosarFilesResponse | null>(null)
 	const [batchFixing, setBatchFixing] = useState(false)
+	const { showNotice, noticeElement } = useBmsAutosarNotice(4000)
 
 	const fetchReport = useCallback(async () => {
 		setLoading(true)
@@ -88,7 +90,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 			setPreview(response)
 		} catch (error) {
 			console.error("Auto-fix failed:", error)
-			alert(`Auto-fix failed: ${getErrorMessage(error)}`)
+			showNotice(`Auto-fix failed: ${getErrorMessage(error)}`, "error")
 		} finally {
 			setFixingFile(null)
 		}
@@ -105,10 +107,10 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 			)
 			setPreview(null)
 			await fetchReport()
-			alert(response.message)
+			showNotice(response.message, "success")
 		} catch (error) {
 			console.error("Apply fix failed:", error)
-			alert(`Apply fix failed: ${getErrorMessage(error)}`)
+			showNotice(`Apply fix failed: ${getErrorMessage(error)}`, "error")
 		} finally {
 			setFixingFile(null)
 		}
@@ -131,7 +133,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 			setBatchPreview(response)
 		} catch (error) {
 			console.error("Batch auto-fix failed:", error)
-			alert(`Batch auto-fix failed: ${getErrorMessage(error)}`)
+			showNotice(`Batch auto-fix failed: ${getErrorMessage(error)}`, "error")
 		} finally {
 			setBatchFixing(false)
 		}
@@ -151,7 +153,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 			alert(response.message)
 		} catch (error) {
 			console.error("Apply all fixes failed:", error)
-			alert(`Apply all fixes failed: ${getErrorMessage(error)}`)
+			showNotice(`Apply all fixes failed: ${getErrorMessage(error)}`, "error")
 		} finally {
 			setBatchFixing(false)
 		}
@@ -368,6 +370,7 @@ export const BmsAutosarQualityReportView: React.FC<{ onDone: () => void }> = ({ 
 					</div>
 				</div>
 			)}
+			{noticeElement}
 		</div>
 	)
 }

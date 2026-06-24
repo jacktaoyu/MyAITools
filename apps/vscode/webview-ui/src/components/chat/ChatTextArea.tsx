@@ -230,6 +230,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			navigateToBmsAutosarWizard,
 			navigateToBmsAutosarQualityReport,
 			navigateToBmsAutosarKnowledgeGraph,
+			navigateToBmsAutosarDashboard,
 			showBmsAutosarCompileManager,
 			setShowBmsAutosarCompileManager,
 		} = useExtensionState()
@@ -1403,9 +1404,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					case "graph":
 						navigateToBmsAutosarKnowledgeGraph()
 						break
+					case "dashboard":
+						navigateToBmsAutosarDashboard()
+						break
 				}
 			},
-			[navigateToBmsAutosarWizard, navigateToBmsAutosarQualityReport, navigateToBmsAutosarKnowledgeGraph],
+			[navigateToBmsAutosarWizard, navigateToBmsAutosarQualityReport, navigateToBmsAutosarKnowledgeGraph, navigateToBmsAutosarDashboard],
 		)
 
 		return (
@@ -1657,6 +1661,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								<VSCodeOption value="compile">Compile</VSCodeOption>
 								<VSCodeOption value="quality">Quality Report</VSCodeOption>
 								<VSCodeOption value="graph">Knowledge Graph</VSCodeOption>
+							<VSCodeOption value="dashboard">Dashboard</VSCodeOption>
 							</VSCodeDropdown>
 
 							<ServersToggleModal />

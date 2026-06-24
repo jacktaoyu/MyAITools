@@ -276,6 +276,9 @@ service UiService {
   // Subscribe to BMS AUTOSAR generator (wizard) open events
   rpc subscribeToBmsAutosarGenerator(EmptyRequest) returns (stream Empty);
 
+  // Subscribe to BMS AUTOSAR dashboard open events
+  rpc subscribeToBmsAutosarDashboard(EmptyRequest) returns (stream Empty);
+
   // Subscribe to partial message updates (streaming Cline messages as they're built)
   rpc subscribeToPartialMessage(EmptyRequest) returns (stream ClineMessage);
 
