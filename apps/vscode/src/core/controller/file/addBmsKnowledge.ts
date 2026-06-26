@@ -17,7 +17,8 @@ import {
 } from "./bmsKnowledgeStorage";
 import { extractDbcEntries } from "@core/task/tools/handlers/bms-autosar/BmsAutosarDbcParser";
 import type { BmsAutosarKnowledgeEntry } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
-import { warmBmsAutosarVectorCache } from "@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex";
+import type { warmBmsAutosarVectorCache as WarmBmsAutosarVectorCacheFn } from "@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex";
+import type { ApiConfiguration } from "@shared/api";
 
 function hashBuffer(buffer: Buffer): string {
 	return createHash("sha256").update(buffer).digest("hex");
@@ -33,6 +34,16 @@ function deriveTags(extension: string, isArxml: boolean): string[] {
 		tags.add(extension.replace(".", ""));
 	}
 	return Array.from(tags);
+}
+
+async function warmBmsAutosarVectorCacheIfNeeded(
+	entries: BmsAutosarKnowledgeEntry[],
+	apiConfiguration: ApiConfiguration,
+): Promise<void> {
+	const { warmBmsAutosarVectorCache } = (await import(
+		"@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex"
+	)) as { warmBmsAutosarVectorCache: typeof WarmBmsAutosarVectorCacheFn };
+	return warmBmsAutosarVectorCache(entries, apiConfiguration);
 }
 
 /**
@@ -141,7 +152,7 @@ export async function addBmsKnowledge(
 				}),
 			);
 			const { kbPath } = await saveBmsKnowledgeEntries({ cwd, scope, entries });
-			warmBmsAutosarVectorCache(
+			warmBmsAutosarVectorCacheIfNeeded(
 				entries,
 				_controller.stateManager.getApiConfiguration(),
 			).catch(() => {
@@ -171,7 +182,7 @@ export async function addBmsKnowledge(
 			locations,
 		});
 
-		warmBmsAutosarVectorCache(
+		warmBmsAutosarVectorCacheIfNeeded(
 			entries,
 			_controller.stateManager.getApiConfiguration(),
 		).catch(() => {

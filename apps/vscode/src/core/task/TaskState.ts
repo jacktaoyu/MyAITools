@@ -34,6 +34,9 @@ export class TaskState {
 
 	// Plan mode specific state
 	isAwaitingPlanResponse = false
+
+	// BMS AUTOSAR mode: when true, BMS-specific tools are included in the system prompt.
+	bmsAutosarMode = false
 	didRespondToPlanAskBySwitchingMode = false
 
 	// Context and history

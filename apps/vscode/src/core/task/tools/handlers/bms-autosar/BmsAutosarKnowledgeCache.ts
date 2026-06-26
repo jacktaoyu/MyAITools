@@ -3,6 +3,7 @@ import path from "node:path"
 import type { ApiConfiguration } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
 import { getClineHomePath } from "@/core/storage/disk"
+import { Logger } from "@/shared/services/Logger"
 import { telemetryService } from "@/services/telemetry"
 import { createEmbedding, type EmbeddingResult, hashContent } from "./BmsAutosarEmbeddingService"
 import type { ArxmlEdge, ArxmlGraph, ArxmlNode } from "./BmsAutosarKnowledgeGraph"
@@ -41,6 +42,7 @@ export interface ArxmlGraphCacheEntry {
 
 const DEFAULT_MEMORY_LIMIT = 128
 const DEFAULT_TTL_MS = 1000 * 60 * 30 // 30 minutes
+const MAX_KNOWLEDGE_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 
 class LRUCache<K, V> {
 	private cache = new Map<K, { value: V; timestamp: number }>()
@@ -190,6 +192,12 @@ export async function loadTemplatesCached(templatesPath: string): Promise<BmsAut
 		return cached.templates
 	}
 
+	if (stat.size > MAX_KNOWLEDGE_FILE_SIZE_BYTES) {
+		Logger.warn(`[BmsAutosarKnowledgeCache] Templates file ${templatesPath} is too large (${(stat.size / 1024 / 1024).toFixed(1)} MB), skipping.`)
+		templatesCache.delete(templatesPath)
+		return undefined
+	}
+
 	const content = await fs.readFile(templatesPath, "utf-8")
 	const templates = JSON.parse(content) as BmsAutosarTemplates
 	templatesCache.set(templatesPath, { mtimeMs: stat.mtimeMs, templates })
@@ -209,6 +217,12 @@ export async function loadKnowledgeSourceCached(filePath: string): Promise<BmsAu
 	const cached = knowledgeCache.get(filePath)
 	if (cached && cached.mtimeMs === stat.mtimeMs) {
 		return cached.source
+	}
+
+	if (stat.size > MAX_KNOWLEDGE_FILE_SIZE_BYTES) {
+		Logger.warn(`[BmsAutosarKnowledgeCache] Knowledge file ${filePath} is too large (${(stat.size / 1024 / 1024).toFixed(1)} MB), skipping.`)
+		knowledgeCache.delete(filePath)
+		return undefined
 	}
 
 	const content = await fs.readFile(filePath, "utf-8")

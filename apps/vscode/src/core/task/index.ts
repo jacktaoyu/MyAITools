@@ -585,13 +585,16 @@ export class Task {
 				}
 				return getPresentationCadenceMs(this.isRemoteWorkspaceEnvironment, priority)
 			},
-			onFlushError: (error) => Logger.debug(`[Task] Failed scheduled presentation flush: ${error}`),
+			onFlushError: (error) => {
+			const stack = error instanceof Error ? error.stack : ""
+			Logger.error(`[Task] Failed scheduled presentation flush: ${error}${stack ? "\\n" + stack : ""}`)
+		},
 		})
 
 		this.toolExecutor = new ToolExecutor(
 			this.taskState,
 			this.messageStateHandler,
-			this.api,
+			() => this.api,
 			this.urlContentFetcher,
 			this.browserSession,
 			this.diffViewProvider,
@@ -1460,6 +1463,17 @@ export class Task {
 	}
 
 	private async initiateTaskLoop(userContent: ClineContent[]): Promise<void> {
+		// Activate BMS AUTOSAR tool mode when the user explicitly invokes it via /bms-autosar.
+		// Once activated for a task, it stays on so follow-up turns in the same BMS session retain the tools.
+		if (!this.taskState.bmsAutosarMode) {
+			const userText = userContent
+				.map((block) => (block.type === "text" ? block.text : ""))
+				.join(" ")
+			if (userText.includes("/bms-autosar")) {
+				this.taskState.bmsAutosarMode = true
+			}
+		}
+
 		let nextUserContent = userContent
 		let includeFileDetails = true
 		while (!this.taskState.abort) {
@@ -1993,6 +2007,7 @@ export class Task {
 			workspaceRoots,
 			isSubagentRun: false,
 			isCliEnvironment,
+			bmsAutosarEnabled: this.taskState.bmsAutosarMode,
 			enableNativeToolCalls:
 				providerInfo.model.info.apiFormat === ApiFormat.OPENAI_RESPONSES ||
 				this.stateManager.getGlobalStateKey("nativeToolCallEnabled"),
@@ -2810,6 +2825,14 @@ export class Task {
 			this.taskState.toolUseIdMap.clear()
 
 			const { toolUseHandler, reasonsHandler } = this.streamHandler.getHandlers()
+
+			// Debug: log request details right before streaming starts
+			const { model: currentModel, providerId: currentProviderId } = this.getCurrentProviderInfo()
+			const apiHistory = this.messageStateHandler.getApiConversationHistory()
+			Logger.log(
+				`[TaskLoop] Starting API request provider=${currentProviderId} model=${currentModel.id} bmsMode=${this.taskState.bmsAutosarMode} apiHistoryMessages=${apiHistory.length}`,
+			)
+
 			const stream = this.attemptApiRequest(previousApiReqIndex) // yields only if the first chunk is successful, otherwise will allow the user to retry the request (most likely due to rate limit error, which gets thrown on the first chunk)
 
 			let assistantMessageId = ""
@@ -2867,6 +2890,14 @@ export class Task {
 
 				let shouldInterruptStream = false
 
+				// Debug: stream chunk telemetry
+				let chunkCount = 0
+				let reasoningLen = 0
+				let textLen = 0
+				let toolCallCount = 0
+				const streamLoopStartMs = Date.now()
+				let lastChunkLogMs = streamLoopStartMs
+
 				while (true) {
 					const chunk = await streamCoordinator.nextChunk()
 					if (!chunk) {
@@ -2907,6 +2938,7 @@ export class Task {
 								this.getPresentationPriorityForChunk({ chunkType: "reasoning", hadVisibleAssistantContent }),
 							)
 							didScheduleAnyContent = true
+							reasoningLen += chunk.reasoning?.length ?? 0
 
 							break
 						}
@@ -2934,6 +2966,7 @@ export class Task {
 								this.getPresentationPriorityForChunk({ chunkType: "tool_calls", hadVisibleAssistantContent }),
 							)
 							didScheduleAnyContent = true
+							toolCallCount++
 							break
 						}
 						case "text": {
@@ -2966,8 +2999,17 @@ export class Task {
 								this.getPresentationPriorityForChunk({ chunkType: "text", hadVisibleAssistantContent }),
 							)
 							didScheduleAnyContent = true
+							textLen += chunk.text?.length ?? 0
 							break
 						}
+					}
+
+					// Debug: log stream chunk telemetry
+					chunkCount++
+					const nowMs = Date.now()
+					if (nowMs - lastChunkLogMs >= 1000) {
+						Logger.log(`[TaskLoop] streaming chunks chunkCount=${chunkCount} elapsedMs=${nowMs - streamLoopStartMs} textLen=${textLen} reasoningLen=${reasoningLen} toolCallCount=${toolCallCount} type=${chunk.type}`)
+						lastChunkLogMs = nowMs
 					}
 
 					if (this.taskState.abort) {
@@ -2998,6 +3040,9 @@ export class Task {
 						break
 					}
 				}
+
+					// Debug: log stream completion summary
+					Logger.log(`[TaskLoop] stream ended chunkCount=${chunkCount} totalElapsedMs=${Date.now() - streamLoopStartMs} finalTextLen=${textLen} finalReasoningLen=${reasoningLen} finalToolCallCount=${toolCallCount}`)
 
 				if (shouldInterruptStream) {
 					await streamCoordinator.stop()

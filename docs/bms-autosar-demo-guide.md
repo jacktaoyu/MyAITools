@@ -81,11 +81,11 @@ apps/vscode/dist/claude-dev-3.89.2-bms-autosar.vsix
 
 ## 四、图谱交互演示
 
-### 4.1 组合节点（AR-PACKAGE）
+### 4.1 AR-PACKAGE 节点
 
-- 注意颜色较淡的矩形 **AR-PACKAGE** 组合节点。
-- 普通节点会被自动归入对应的包内。
-- 点击包节点，子节点一起高亮。
+- 注意灰色的 **AR-PACKAGE** 节点，它表示 AUTOSAR 包层级。
+- 包与成员之间通过 `contains` 边连接，保留层级语义。
+- 点击包节点可高亮其直接关联的成员。
 
 ### 4.2 节点类型过滤
 
@@ -112,10 +112,10 @@ apps/vscode/dist/claude-dev-3.89.2-bms-autosar.vsix
 
 ### 4.4 布局切换
 
-- 顶部下拉框切换布局：
+- 顶部下拉框切换布局（默认已改为 `Hierarchical (dagre)`）：
+  - **Hierarchical (dagre)**：默认，适合展示 AUTOSAR 包 → 组件 → 端口的层级依赖
   - **Force (cose)**：基础力导向
-  - **Force Bilkent**：适合展示模块聚类
-  - **Hierarchical (dagre)**：适合展示层级依赖
+  - **Force Bilkent**：适合展示模块聚类；若出现节点重叠会自动 fallback 到 Grid
   - **Grid / Circle / Concentric / Breadthfirst**：其他视图
 
 ### 4.5 搜索节点
@@ -237,8 +237,14 @@ A：确认 ARXML 文件在磁盘上存在且未被移动；首次打开需要一
 **Q：外部节点没有连边？**  
 A：自动关联按“节点名称”大小写不敏感精确匹配。如果 DBC 信号名与 ARXML 端口名不一致则不会连边；后续可扩展 fuzzy 匹配。
 
-**Q：布局很乱？**  
-A：切换成 `Hierarchical (dagre)` 或点击 `Fit`；Package 多时 `cose-bilkent` 可能需要多等几秒。
+**Q：布局很乱或节点重叠？**  
+A：默认使用 `dagre` 层次布局。若手动切换到 `cose-bilkent` 后出现重叠，系统会自动 fallback 到 `grid`；也可以手动切回 `dagre` 或点击 `Fit`。
+
+**Q：输入 `/bms-autosar` 后没有触发 BMS 工具？**  
+A：确认消息里包含 `/bms-autosar` 前缀；激活后该任务会话内会保留 BMS 工具。可打开 Output 面板查看 `[SystemPrompt]` 日志确认工具是否注入。
+
+**Q：插件卡在 "Thinking..."？**  
+A：打开 Output 面板查看 `[TaskLoop]` / `[Task] Failed scheduled presentation flush` 日志；本次版本已修复 `ToolExecutor` 初始化顺序导致的崩溃。
 
 **Q：插件激活慢？**  
 A：`hnswlib-node` 已改为懒加载，首次激活会稍慢，后续使用正常。

@@ -7,11 +7,7 @@ import {
 	BmsAutosarKnowledgeGraphRequest,
 } from "@shared/proto/cline/file";
 import { getBmsKnowledgeDir } from "@core/controller/file/bmsKnowledgeStorage";
-import { buildArxmlKnowledgeGraph } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeGraph";
-import {
-	loadArxmlGraphCached,
-	saveArxmlGraphCached,
-} from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache";
+import type { ArxmlGraph } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeGraph";
 import type { BmsAutosarKnowledgeFile } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
 import { getCwd, getDesktopDir } from "@utils/path";
 import type { Controller } from "..";
@@ -51,11 +47,18 @@ export async function getBmsAutosarKnowledgeGraph(
 		}
 	}
 
-	const mergedGraph: import("@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeGraph").ArxmlGraph =
-		{
-			nodes: new Map(),
-			edges: [],
-		};
+	const mergedGraph: ArxmlGraph = {
+		nodes: new Map(),
+		edges: [],
+	};
+
+	const [
+		{ buildArxmlKnowledgeGraph },
+		{ loadArxmlGraphCached, saveArxmlGraphCached },
+	] = await Promise.all([
+		import("@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeGraph"),
+		import("@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache"),
+	]);
 
 	for (const filePath of arxmlPaths) {
 		const stat = await fs.stat(filePath).catch(() => undefined);

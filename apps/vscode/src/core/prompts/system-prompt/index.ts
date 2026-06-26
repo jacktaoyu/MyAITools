@@ -1,3 +1,4 @@
+import { Logger } from "@/shared/services/Logger"
 import { PromptRegistry } from "./registry/PromptRegistry"
 import type { SystemPromptContext } from "./types"
 
@@ -17,5 +18,13 @@ export async function getSystemPrompt(context: SystemPromptContext) {
 	const registry = PromptRegistry.getInstance()
 	const systemPrompt = await registry.get(context)
 	const tools = context.enableNativeToolCalls ? registry.nativeTools : undefined
+
+	// Debug: log system prompt composition and BMS tool injection state
+	const hasGenerate = systemPrompt.includes("bms_autosar_generate")
+	const hasKnowledge = systemPrompt.includes("bms_autosar_knowledge")
+	Logger.log(
+		`[SystemPrompt] length=${systemPrompt.length} bmsAutosarEnabled=${context.bmsAutosarEnabled} hasGenerate=${hasGenerate} hasKnowledge=${hasKnowledge} nativeTools=${tools?.length ?? 0}`,
+	)
+
 	return { systemPrompt, tools }
 }

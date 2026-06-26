@@ -7,9 +7,11 @@ import {
 	AutoFixBmsAutosarFileResponse,
 	BmsAutosarQualityIssue,
 } from "@shared/proto/cline/file";
-import { autoFixBmsAutosarFile as runBmsAutosarAutoFix } from "@core/task/tools/handlers/bms-autosar/BmsAutosarAutoFixer";
-import { runBmsAutosarQualityGates } from "@core/task/tools/utils/BmsAutosarQualityGates";
-import type { ValidationIssue } from "@core/task/tools/utils/BmsAutosarValidationUtils";
+import type { AutoFixResult } from "@core/task/tools/handlers/bms-autosar/BmsAutosarAutoFixer";
+import type {
+	ValidationIssue,
+	ValidationResult,
+} from "@core/task/tools/utils/BmsAutosarValidationUtils";
 import { getCwd, getDesktopDir } from "@utils/path";
 import type { Controller } from "..";
 
@@ -46,7 +48,18 @@ export async function autoFixBmsAutosarFile(
 				| "plan"
 				| "act") || "act";
 		const apiHandler = await buildApiHandler(apiConfiguration, mode);
-		const result = await runBmsAutosarAutoFix(apiHandler, cwd, relPath);
+		const [
+			{ autoFixBmsAutosarFile: runBmsAutosarAutoFix },
+			{ runBmsAutosarQualityGates },
+		] = await Promise.all([
+			import("@core/task/tools/handlers/bms-autosar/BmsAutosarAutoFixer"),
+			import("@core/task/tools/utils/BmsAutosarQualityGates"),
+		]);
+		const result: AutoFixResult = await runBmsAutosarAutoFix(
+			apiHandler,
+			cwd,
+			relPath,
+		);
 
 		const diff = formatResponse.createPrettyPatch(
 			relPath,
@@ -60,7 +73,7 @@ export async function autoFixBmsAutosarFile(
 			applied = true;
 		}
 
-		const remainingResult = await runBmsAutosarQualityGates(
+		const remainingResult: ValidationResult = await runBmsAutosarQualityGates(
 			relPath,
 			result.fixedContent,
 			{ cwd },

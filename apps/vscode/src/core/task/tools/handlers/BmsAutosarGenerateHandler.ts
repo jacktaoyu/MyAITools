@@ -8,6 +8,7 @@ import { fileExistsAtPath } from "@utils/fs"
 import { createConcurrencyLimit } from "@utils/concurrency"
 
 import { ClineDefaultTool } from "@/shared/tools"
+import { Logger } from "@/shared/services/Logger"
 import { telemetryService } from "@/services/telemetry"
 import type { ApiConfiguration } from "@shared/api"
 import type { ToolResponse } from "../../index"
@@ -80,6 +81,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 		const startTime = Date.now()
 		const configFile = block.params.config_file
 		const componentCount = configFile ? await this.estimateBatchComponentCount(config.cwd, configFile) : 1
+		Logger.log(`[BmsAutosarGenerateHandler] execute start component_name=${block.params.component_name ?? "n/a"} component_type=${block.params.component_type ?? "n/a"} configFile=${configFile ?? "n/a"}`)
 
 		try {
 			await emitBmsAutosarProgress(config.taskId, {
@@ -93,6 +95,7 @@ export class BmsAutosarGenerateHandler implements IToolHandler, IPartialBlockHan
 				: await this.executeSingle(config, block)
 			const duration = Date.now() - startTime
 			const isBatch = componentCount > 1
+			Logger.log(`[BmsAutosarGenerateHandler] execute completed durationMs=${duration}`)
 			telemetryService.captureBmsAutosarGenerateCompleted(config.ulid, duration, componentCount, isBatch)
 			await completeBmsAutosarProgress(config.taskId)
 			return result

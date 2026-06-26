@@ -9,6 +9,7 @@ const generic: ClineToolSpec = {
 	id,
 	name: "bms_autosar_generate",
 	description: `Generate AUTOSAR Classic Platform software artifacts for Battery Management Systems (BMS). This tool can produce SWC implementations (.c/.h), BSW module implementations, RTE interface definitions, ARXML descriptors, and BMS-domain specialized components (controller, balancer, thermal manager, charger, CSC, diagnosis) following AUTOSAR naming conventions and MISRA C:2012 aligned coding rules.`,
+	contextRequirements: (context) => context.bmsAutosarEnabled === true,
 	parameters: [
 		{
 			name: "component_type",

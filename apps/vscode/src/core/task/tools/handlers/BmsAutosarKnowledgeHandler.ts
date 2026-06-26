@@ -8,6 +8,7 @@ import { isLocatedInPath } from "@utils/path"
 import { getClineHomePath } from "@/core/storage/disk"
 import { telemetryService } from "@/services/telemetry"
 import { ClineDefaultTool } from "@/shared/tools"
+import { Logger } from "@/shared/services/Logger"
 import { canCreateEmbeddings, createEmbeddings, DEFAULT_EMBEDDING_MODEL, hashContent } from "./bms-autosar/BmsAutosarEmbeddingService"
 import {
 	suggestBmsAutosarTags,
@@ -63,6 +64,7 @@ export class BmsAutosarKnowledgeHandler implements IToolHandler, IPartialBlockHa
 		const folderPath = block.params.folder_path || ""
 		const tagsRaw = block.params.tags || ""
 		const scope = block.params.scope === "global" ? "global" : "workspace"
+		Logger.log(`[BmsAutosarKnowledgeHandler] execute start action=${action} topic=${topic || "n/a"}`)
 
 		if (!action) {
 			config.taskState.consecutiveMistakeCount++
@@ -93,6 +95,7 @@ export class BmsAutosarKnowledgeHandler implements IToolHandler, IPartialBlockHa
 					return formatResponse.toolResult(`Error: Unhandled action "${action}".`)
 			}
 		} catch (error) {
+			Logger.log(`[BmsAutosarKnowledgeHandler] execute error action=${action} error=${error}`)
 			return formatResponse.toolResult(`Error managing BMS AUTOSAR knowledge base: ${error}`)
 		}
 	}
@@ -178,6 +181,7 @@ export class BmsAutosarKnowledgeHandler implements IToolHandler, IPartialBlockHa
 		})
 
 		invalidateBmsAutosarKnowledgeCache(kbPath)
+		Logger.log(`[BmsAutosarKnowledgeHandler] triggering background embedding refresh for ${kbPath}`)
 		this.refreshEmbeddingsForFile(config, kbPath).catch(() => {})
 
 		if (chunkCount > 0) {

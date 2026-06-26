@@ -270,7 +270,9 @@ if (!graph) {
 | `BmsAutosarKnowledgeGraphView` | `webview-ui/src/components/bms-autosar/BmsAutosarKnowledgeGraphView.tsx` | 视图容器、ARXML 文件选择、刷新 |
 | `BmsAutosarDashboard` | `webview-ui/src/components/bms-autosar/BmsAutosarDashboard.tsx` | Dashboard 入口与指标 |
 
-### 5.3 节点样式映射
+### 5.3 节点与布局
+
+#### 节点样式映射
 
 | 类型 | 颜色 | 半径 |
 | --- | --- | --- |
@@ -287,19 +289,26 @@ if (!graph) {
 
 ### 5.4 布局算法
 
-提供 7 种布局：
+提供 7 种布局，默认改为 `dagre`：
 
-1. `cose`
-2. `cose-bilkent`（默认）
-3. `dagre`（新增层次布局）
+1. `dagre`（默认，层次 LR，适合 AUTOSAR 包 → 组件 → 端口层级）
+2. `cose`
+3. `cose-bilkent`
 4. `grid`
 5. `circle`
 6. `concentric`
 7. `breadthfirst`
 
+渲染实现要点：
+
+- 节点不再使用 Cytoscape compound `parent` 关系，所有节点平铺，包层级通过 `contains` 边表达。
+- 节点尺寸、颜色、标签使用 `data(size)` / `data(color)` / `data(label)` 字符串样式映射，避免函数映射在 layout 阶段拿不到尺寸。
+- 容器遮罩使用 `opacity: 0` + `pointer-events: none` 代替 `visibility: hidden`，保证 Cytoscape 能读取容器尺寸。
+- 布局在 `requestAnimationFrame` 后触发，`layoutstop` 前后调用 `cy.resize()`。
+- 若布局结果 `boundingBox` 面积 `< 10000` 或宽高 `< 50`，自动 fallback 到 `grid` 重新布局。
+
 ### 5.5 交互功能
 
-- 组合节点：AR-PACKAGE 作为 parent。
 - 类型过滤 / 关系过滤。
 - 搜索过滤。
 - 双击打开源文件。
@@ -623,3 +632,62 @@ npm run protos
 - `apps/vscode/webview-ui/src/services/grpc-client.ts`
 - `apps/vscode/src/generated/hosts/vscode/protobus-services.ts`
 - `apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts`
+
+---
+
+## 14. 2026-06-27 运行时稳定性修复
+
+### 14.1 ToolExecutor 初始化顺序崩溃
+
+- 现象：修改版 BMS 插件在模型输出后长时间卡在 "Thinking..."，同一模型下原版 Cline 流畅。
+- 根因：`ToolExecutor` 在 `Task` 构造函数中创建时，`this.api` 尚未初始化（`initializeApi()` 在构造后才调用），导致 UI flush 阶段调用 `this.api.getModel()` 抛出 `TypeError: Cannot read properties of undefined (reading 'getModel')`。
+- 修复：`ToolExecutor` 构造函数改为接收 `getApi: () => ApiHandler` getter；`asToolConfig()`、`isParallelToolCallingEnabled()`、`applyLatestBrowserSettings()`、`executeTool()` 的 hook model 上下文均改为 `this.getApi()`，使用时再动态获取已初始化的 API handler。
+- 影响文件：`src/core/task/ToolExecutor.ts`、`src/core/task/index.ts`。
+
+### 14.2 ARXML 知识图谱布局塌缩
+
+- 现象：知识图谱渲染后所有节点/边压成底部一小团。
+- 根因：Cytoscape `cose-bilkent` 对 `AR-PACKAGE` compound 父节点（嵌套包套子包）处理异常，所有节点坐标被算到原点。
+- 修复：
+  - 去掉 Cytoscape compound `parent` 关系，所有节点平铺，包层级通过 `contains` 边表达。
+  - 默认布局从 `cose-bilkent` 改为 `dagre`（层次 LR）。
+  - 布局结束后计算 `boundingBox`，若面积 `< 10000` 或宽高 `< 50` 自动 fallback 到 `grid`。
+  - 节点样式从函数回调改为 `data(...)` 字符串映射。
+  - 容器遮罩从 `visibility: hidden` 改为 `opacity: 0` + `pointer-events: none`。
+  - 布局触发加入 `requestAnimationFrame` 延迟，并在 `layoutstop` 前后调用 `cy.resize()`。
+- 影响文件：`webview-ui/src/components/bms-autosar/BmsAutosarKnowledgeGraphRenderer.tsx`、`webview-ui/vite.config.ts`。
+
+### 14.3 懒加载深化
+
+- `ToolExecutorCoordinator` 中 BMS Handler 改为懒加载包装类。
+- `BmsAutosarEmbeddingService` 中 `Ollama` 改为运行时动态 `import()`。
+- `searchBmsKnowledge`、`addBmsKnowledge`、`addBmsKnowledgeFolder`、`autoFixBmsAutosarFile`、`autoFixBmsAutosarFiles` 均在运行时动态 import 检索/修复相关重模块。
+- `extension.ts` 中 BMS UI 事件发送器改为命令触发时动态 import。
+- `vite.config.ts` 将知识图谱渲染器拆分为独立 `knowledgeGraph` chunk，按需加载 cytoscape / dagre / cose-bilkent。
+
+### 14.4 BMS 工具按需注入与模式激活
+
+- `bms_autosar_generate` / `bms_autosar_knowledge` 工具描述新增 `contextRequirements: (context) => context.bmsAutosarEnabled === true`。
+- `SystemPromptContext` 新增 `bmsAutosarEnabled`，`TaskState` 新增 `bmsAutosarMode`。
+- `Task.initiateTaskLoop()` 检测用户输入包含 `/bms-autosar` 时激活 BMS 模式，整个任务会话内保留 BMS 工具注入。
+
+### 14.5 调试与可观测性
+
+- `Task` 主循环：请求前输出 provider/model/bmsMode/apiHistoryMessages；流式循环内每秒输出 chunk 统计；`onFlushError` 输出完整堆栈。
+- `getSystemPrompt()`：输出 prompt 长度、BMS 模式开关、BMS 工具注入情况、native tools 数量。
+- `BmsAutosarGenerateHandler` / `BmsAutosarKnowledgeHandler`：输出调用参数与完成/错误状态。
+- `BmsAutosarEmbeddingService`：输出 embedding 调用长度/数量、模型、耗时、成功/失败。
+
+### 14.6 知识缓存文件大小保护
+
+- `BmsAutosarKnowledgeCache.ts` 的 `loadTemplatesCached` / `loadKnowledgeSourceCached` 增加 `MAX_KNOWLEDGE_FILE_SIZE_BYTES = 10 MB` 上限，超大文件跳过并记录警告，防止异常大文件导致内存/解析问题。
+
+### 14.7 构建验证（2026-06-27）
+
+| 检查项 | 结果 |
+| --- | --- |
+| `check-types` | ✅ 通过 |
+| `lint` / `lint:proto` | ✅ 通过 |
+| `test:unit` | ✅ **1716 passing** |
+| `package:vsix` | ✅ 成功，产物 9.12 MB |
+

@@ -4,7 +4,7 @@
 > **版本**：`claude-dev@3.89.2-bms-autosar`  
 > **产物**：`apps/vscode/dist/claude-dev-3.89.2-bms-autosar.vsix`（约 9.12 MB）  
 > **基板工程**：`AUTOSAR-BMS--main/`（演示用；实际工程路径可替换）  
-> **交付日期**：2026-06-25
+> **交付日期**：2026-06-27
 
 ---
 
@@ -56,6 +56,12 @@
 | --- | --- | --- |
 | 插件激活事件补齐 | ✅ | `package.json` 增加 `onCommand:cline.bmsAutosarDashboard` 等激活事件 |
 | `hnswlib-node` 懒加载 | ✅ | 改为运行时 `import()`，避免扩展激活期原生模块崩溃 |
+| BMS Handler / Ollama / RAG 懒加载 | ✅ | 首次使用时才 `import()`，降低激活期负载 |
+| UI 事件发送器懒加载 | ✅ | 命令触发时动态 import，减少激活依赖 |
+| ToolExecutor 初始化顺序修复 | ✅ | `getApi()` getter 避免构造时 `this.api` 未定义 |
+| BMS 模式激活 | ✅ | 输入 `/bms-autosar` 激活，会话内持续保留 BMS 工具 |
+| 调试日志增强 | ✅ | Task 主循环、System Prompt、BMS Handler、Embedding 四层日志 |
+| 知识缓存大小保护 | ✅ | 超过 10 MB 的模板/知识文件跳过并告警 |
 
 ### 2.2 ARXML 知识图谱
 
@@ -71,10 +77,10 @@
 
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
-| AR-PACKAGE 组合节点 | ✅ | Cytoscape compound nodes 实现包层级 |
+| AR-PACKAGE 节点与 contains 边 | ✅ | 包节点与成员通过 `contains` 边表达层级（已移除 compound parent） |
 | 节点类型过滤 | ✅ | 支持所有 AUTOSAR 元素类型 |
 | 关系类型过滤 | ✅ | contains / provides / requires / implements / references / triggers |
-| Dagre 层次布局 | ✅ | 新增 `Hierarchical (dagre)` 布局 |
+| Dagre 层次布局 | ✅ | 默认 `Hierarchical (dagre)` 布局；`cose-bilkent` 塌缩时自动 fallback 到 `grid` |
 | 双击打开源文件 | ✅ | 双击节点调用 `openArxmlSource` |
 | 面包屑导航 | ✅ | 底部显示 packagePath，点击包名聚焦 |
 | 搜索过滤 | ✅ | 按名称、路径、ID、类型实时过滤 |
@@ -302,11 +308,26 @@ export interface ArxmlNode {
 
 #### 3.6.4 布局算法
 
-提供 7 种布局：`cose`、`cose-bilkent`、`dagre`、`grid`、`circle`、`concentric`、`breadthfirst`。
+提供 7 种布局，默认改为 `dagre`：
+
+1. `dagre`（默认，层次 LR）
+2. `cose`
+3. `cose-bilkent`
+4. `grid`
+5. `circle`
+6. `concentric`
+7. `breadthfirst`
+
+渲染稳定性优化：
+
+- 节点不再使用 Cytoscape compound `parent` 关系，所有节点平铺，包层级通过 `contains` 边表达。
+- 节点尺寸/颜色/标签使用 `data(...)` 字符串样式映射。
+- 容器遮罩使用 `opacity: 0` + `pointer-events: none` 代替 `visibility: hidden`。
+- 布局触发加入 `requestAnimationFrame` 延迟，`layoutstop` 前后调用 `cy.resize()`。
+- 若 `boundingBox` 面积 `< 10000` 或宽高 `< 50`，自动 fallback 到 `grid`。
 
 #### 3.6.5 交互功能
 
-- 组合节点：AR-PACKAGE 作为 parent。
 - 类型过滤 / 关系过滤。
 - 搜索过滤。
 - 双击打开源文件。
@@ -403,7 +424,7 @@ npm run package:vsix
 | `check-types` | ✅ 通过 |
 | `lint` | ✅ 通过 |
 | `test:unit` | ✅ **1716 passing** |
-| `package:vsix` | ✅ 成功，产物 9.12 MB |
+| `package:vsix` | ✅ 成功，产物 9.12 MB（2026-06-27 构建） |
 
 修改 proto 后运行 `npm run protos` 会重新生成所有客户端/服务端桩代码。
 
@@ -415,7 +436,7 @@ npm run package:vsix
 2. 外部节点匹配：当前为大小写不敏感精确匹配，名称不一致时无法关联。
 3. Simulink 解析：基于正则，对复杂 `.m` 脚本支持有限。
 4. ARXML 行号定位：通过 `<SHORT-NAME>` 匹配计算行号，同名元素可能定位到第一个出现位置。
-5. 图谱性能：超大 ARXML（数万节点）在 Cytoscape 中渲染和布局性能会下降。
+5. 图谱性能：超大 ARXML（数万节点）在 Cytoscape 中渲染和布局性能会下降；目前已去掉 compound 节点以提升布局稳定性。
 
 #### 后续方向
 

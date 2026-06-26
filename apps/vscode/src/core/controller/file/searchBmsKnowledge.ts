@@ -1,7 +1,7 @@
 import path from "node:path";
 import { getClineHomePath } from "@/core/storage/disk";
 import { loadBmsAutosarKnowledgeBaseWithSourcesCached } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeCache";
-import { retrieveRelevantKnowledgeResults } from "@core/task/tools/handlers/bms-autosar/BmsAutosarSemanticRetrieval";
+import type { retrieveRelevantKnowledgeResults as RetrieveRelevantKnowledgeResultsFn } from "@core/task/tools/handlers/bms-autosar/BmsAutosarSemanticRetrieval";
 import {
 	BmsAutosarKnowledgeIntent,
 	BmsKnowledgeSearchResults,
@@ -55,6 +55,12 @@ export async function searchBmsKnowledge(
 	if (sources.length === 0) {
 		return BmsKnowledgeSearchResults.create({ results: [] });
 	}
+
+	const { retrieveRelevantKnowledgeResults } = (await import(
+		"@core/task/tools/handlers/bms-autosar/BmsAutosarSemanticRetrieval"
+	)) as {
+		retrieveRelevantKnowledgeResults: typeof RetrieveRelevantKnowledgeResultsFn;
+	};
 
 	const apiConfiguration = controller.stateManager.getApiConfiguration();
 	const topK = request.topK && request.topK > 0 ? request.topK : 5;

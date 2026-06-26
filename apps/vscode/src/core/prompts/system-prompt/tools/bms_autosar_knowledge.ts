@@ -9,6 +9,7 @@ const generic: ClineToolSpec = {
 	id,
 	name: "bms_autosar_knowledge",
 	description: `Manage the user-extensible BMS AUTOSAR knowledge base. Use this tool to add, list, retrieve, or delete project-specific rules, templates, naming conventions, ARXML patterns, and other BMS AUTOSAR guidance. Entries added here are automatically referenced by the bms_autosar_generate tool when generating code.`,
+	contextRequirements: (context) => context.bmsAutosarEnabled === true,
 	parameters: [
 		{
 			name: "action",

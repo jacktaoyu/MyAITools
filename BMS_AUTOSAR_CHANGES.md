@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-06-25（第三十七次迭代补充 / 性能优化：BMS 模块懒加载）
+
+### 优化内容
+
+- **BMS AUTOSAR 工具 Handler 懒加载**
+  - `ToolExecutorCoordinator` 中 `BMS_AUTOSAR_GENERATE` 与 `BMS_AUTOSAR_KNOWLEDGE` 改为 `LazyBmsAutosarGenerateHandler` / `LazyBmsAutosarKnowledgeHandler`。
+  - 首次调用对应工具时才动态 `import()` 真实 Handler，避免扩展激活期加载模板/检索/Embedding 整个依赖图。
+
+- **Ollama 客户端懒加载**
+  - `BmsAutosarEmbeddingService.ts` 移除顶部静态 `import { Ollama } from "ollama"`。
+  - 改为在 `createOllamaClient` 内部动态 `import("ollama")`，只有使用 Ollama embedding 时才加载该模块。
+
+- **RAG 检索与向量预热懒加载**
+  - `searchBmsKnowledge.ts` 改为在函数内部动态 `import("@core/task/tools/handlers/bms-autosar/BmsAutosarSemanticRetrieval")`，避免激活期加载检索 Worker、QueryExpander、Reranker 等模块。
+  - `addBmsKnowledge.ts` / `addBmsKnowledgeFolder.ts` 改为在保存知识条目后动态 `import("@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex")` 触发向量缓存预热，避免激活期加载 HNSW/Embedding 相关代码。
+
+### 文档同步
+
+- 更新 `docs/bms-autosar-demo-guide.md`：调整 AR-PACKAGE 节点说明、默认 `dagre` 布局描述、新增 Q&A。
+- 更新 `docs/bms-autosar-technical-summary.md`：新增第 14 章“2026-06-27 运行时稳定性修复”，更新布局与交互章节。
+- 更新 `docs/bms-autosar-project-delivery.md`：交付日期改为 2026-06-27，功能清单补充懒加载、初始化顺序修复、BMS 模式、调试日志、缓存大小保护。
+
+### 构建验证
+
+- `npm run check-types` 全部通过。
+- `npm run lint`、`npm run lint:proto` 全部通过。
+- `NODE_OPTIONS=--no-experimental-strip-types npm run test:unit` 共 **1716** 项通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（9.12 MB）。
+
+---
+
 ## 2026-06-25（第三十七次迭代 / 知识图谱源定位与外部数据联动）
 
 ### 新增功能
@@ -1368,3 +1399,87 @@
 - 生成文件：`apps/vscode/dist/cline.vsix`（9.83 MB）。
 
 ---
+---
+
+## 2026-06-27（第三十八次迭代 / 运行时稳定性：初始化顺序修复、懒加载深化、ARXML 图谱布局修复）
+
+### 问题修复
+
+- **ToolExecutor 初始化顺序崩溃**
+  - 现象：修改版 BMS 插件在模型输出后长时间卡在 "Thinking..."，同一模型下原版 Cline 流畅。
+  - 根因：`ToolExecutor` 在 `Task` 构造函数中创建时，`this.api` 尚未初始化（`initializeApi()` 在构造后才调用），导致 UI flush 阶段调用 `this.api.getModel()` 抛出 `TypeError: Cannot read properties of undefined (reading 'getModel')`。
+  - 修复：`ToolExecutor` 不再在构造时持有 `api` 实例，改为接收 `getApi: () => ApiHandler` getter，所有原 `this.api` 访问点（`asToolConfig()`、`isParallelToolCallingEnabled()`、`applyLatestBrowserSettings()`、`executeTool()` 的 hook model 上下文）均改为 `this.getApi()`，使用时再动态获取已初始化的 API handler。
+  - 影响文件：`src/core/task/ToolExecutor.ts`、`src/core/task/index.ts`（`ToolExecutor` 构造参数）。
+
+- **ARXML 知识图谱节点全部重叠塌缩**
+  - 现象：知识图谱渲染后所有节点/边压成底部一小团，无法查看结构。
+  - 根因：Cytoscape `cose-bilkent` 布局对 `AR-PACKAGE` compound 父节点（嵌套包套子包）处理异常，当父节点缺失或嵌套过深时所有节点坐标被算到原点 `(0,0)`，再经 `cy.fit()` 缩成一团。
+  - 修复：
+    1. 去掉 Cytoscape compound `parent` 关系，所有节点平铺，包与成员的 `contains` 边保留以维持层次语义。
+    2. 默认布局从 `cose-bilkent` 改为 `dagre`（层次 LR），对 AUTOSAR "包 → 组件 → 端口/接口" 的层级结构更稳定。
+    3. 布局结束后计算 `boundingBox`，若面积 `< 10000` 或宽高 `< 50` 自动 fallback 到 `grid` 重新布局，并输出控制台诊断日志。
+    4. 节点样式映射从函数回调改为 `data(color)` / `data(size)` / `data(label)` 字符串形式，避免 layout 阶段读取不到动态样式尺寸。
+    5. 容器遮罩从 `visibility: hidden` 改为 `opacity: 0` + `pointer-events: none`，确保 Cytoscape 始终能读取容器实际尺寸。
+    6. 布局触发加入 `requestAnimationFrame` 延迟，并在 `layoutstop` 前后调用 `cy.resize()`。
+  - 影响文件：`webview-ui/src/components/bms-autosar/BmsAutosarKnowledgeGraphRenderer.tsx`。
+
+### 性能优化：懒加载深化
+
+- **BMS Handler 懒加载**
+  - `ToolExecutorCoordinator` 中 `BMS_AUTOSAR_GENERATE` / `BMS_AUTOSAR_KNOWLEDGE` 改为 `LazyBmsAutosarGenerateHandler` / `LazyBmsAutosarKnowledgeHandler`。
+  - 首次调用对应工具时才 `import()` 真实 Handler，避免扩展激活期加载模板/检索/Embedding 整个依赖图。
+
+- **Ollama 客户端懒加载**
+  - `BmsAutosarEmbeddingService.ts` 移除顶部静态 `import { Ollama } from "ollama"`。
+  - 改为在 `createOllamaClient` 内部动态 `import("ollama")`，只有使用 Ollama embedding 时才加载该模块。
+
+- **RAG 检索与向量预热懒加载**
+  - `searchBmsKnowledge.ts` 改为在函数内部动态 `import("@core/task/tools/handlers/bms-autosar/BmsAutosarSemanticRetrieval")`。
+  - `addBmsKnowledge.ts` / `addBmsKnowledgeFolder.ts` 改为在保存知识条目后动态 `import("@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex")` 触发向量缓存预热。
+  - `autoFixBmsAutosarFile.ts` / `autoFixBmsAutosarFiles.ts` 改为在运行时动态 `import()` `BmsAutosarAutoFixer` 与 `BmsAutosarQualityGates`。
+
+- **UI 事件发送器懒加载**
+  - `extension.ts` 中 `sendBmsAutosarCompileEvent`、`sendBmsAutosarDashboardEvent`、`sendBmsAutosarGeneratorEvent`、`sendBmsAutosarKnowledgeGraphEvent`、`sendBmsAutosarQualityReportEvent` 改为命令触发时 `await import()`，移除扩展激活期的静态 import。
+
+- **知识图谱组件独立 chunk**
+  - `webview-ui/vite.config.ts` 将 `BmsAutosarKnowledgeGraphRenderer.tsx` 单独拆分为 `knowledgeGraph` chunk，减少主 bundle 体积，按需加载 cytoscape / dagre / cose-bilkent。
+
+### 调试与可观测性增强
+
+- **Task 主循环调试日志**
+  - `initiateTaskLoop` 中识别 `/bms-autosar` 并开启 BMS 模式时记录日志。
+  - 流式请求前输出 `provider`、`model`、`bmsMode`、`apiHistoryMessages` 数量。
+  - 流式循环内每秒输出 `chunkCount`、`textLen`、`reasoningLen`、`toolCallCount` 统计。
+  - `onFlushError` 从 `Logger.debug` 升级为 `Logger.error`，并附加完整堆栈。
+
+- **System Prompt 调试日志**
+  - `getSystemPrompt()` 输出 prompt 长度、BMS 模式开关、`bms_autosar_generate` / `bms_autosar_knowledge` 工具注入情况、native tools 数量。
+
+- **BMS Handler 调试日志**
+  - `BmsAutosarGenerateHandler.execute()` 开头输出 `component_name`、`component_type`、`config_file`。
+  - `BmsAutosarKnowledgeHandler.execute()` 开头输出 `action`、`topic`、`scope`。
+
+- **Embedding 调试日志**
+  - `createEmbedding` / `createEmbeddings` 输出文本长度/数量、模型、耗时、成功/失败状态。
+  - OpenAI 与 Ollama 分支均记录 `done` / `failed` 日志。
+
+### 其他改进
+
+- **BMS 工具按需注入**
+  - `bms_autosar_generate` / `bms_autosar_knowledge` 工具描述新增 `contextRequirements: (context) => context.bmsAutosarEnabled === true`。
+  - `SystemPromptContext` 新增 `bmsAutosarEnabled?: boolean`。
+  - `TaskState` 新增 `bmsAutosarMode = false`。
+  - `Task.initiateTaskLoop()` 检测用户输入包含 `/bms-autosar` 时激活 `bmsAutosarMode`，该任务会话内持续生效，后续轮次自动保留 BMS 工具。
+
+- **知识缓存文件大小保护**
+  - `BmsAutosarKnowledgeCache.ts` 的 `loadTemplatesCached` / `loadKnowledgeSourceCached` 增加 `MAX_KNOWLEDGE_FILE_SIZE_BYTES = 10 MB` 上限，超大文件跳过并记录警告，防止异常大文件导致内存/解析问题。
+
+### 构建验证
+
+- `npm run check-types` 全部通过。
+- `npm run lint`、`npm run lint:proto` 全部通过。
+- `NODE_OPTIONS=--no-experimental-strip-types npm run test:unit` 共 **1716** 项通过。
+- `npm run package:vsix` 成功生成 `dist/claude-dev-3.89.2-bms-autosar.vsix`（9.12 MB）。
+
+---
+

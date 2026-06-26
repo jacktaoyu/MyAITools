@@ -1,4 +1,3 @@
-import ExcelJS from "exceljs";
 import { StringRequest } from "@shared/proto/cline/common";
 import {
 	BmsAutosarExternalGraph,
@@ -18,7 +17,8 @@ export async function parseBmsAutosarExcel(
 		return BmsAutosarExternalGraph.create({ nodes: [], edges: [] });
 	}
 
-	const workbook = new ExcelJS.Workbook();
+	const { default: ExcelJSRuntime } = await import("exceljs");
+	const workbook = new ExcelJSRuntime.Workbook();
 	await workbook.xlsx.readFile(filePath);
 	const nodes: BmsAutosarExternalNode[] = [];
 	const type = filePath.toLowerCase().includes("parameter")

@@ -98,6 +98,7 @@ export default defineConfig({
 							vendor: ["react", "react-dom"],
 							ui: ["@heroui/react", "framer-motion", "lucide-react"],
 							wizard: ["./src/components/bms-autosar/BmsAutosarWizard.tsx"],
+							knowledgeGraph: ["./src/components/bms-autosar/BmsAutosarKnowledgeGraphRenderer.tsx"],
 						},
 				// Disable compact output for dev build
 				compact: !isDevBuild,

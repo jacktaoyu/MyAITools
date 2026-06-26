@@ -23,8 +23,7 @@ import { UseSubagentsToolHandler } from "./handlers/SubagentToolHandler"
 import { SummarizeTaskHandler } from "./handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./handlers/UseMcpToolHandler"
 import { UseSkillToolHandler } from "./handlers/UseSkillToolHandler"
-import { BmsAutosarGenerateHandler } from "./handlers/BmsAutosarGenerateHandler"
-import { BmsAutosarKnowledgeHandler } from "./handlers/BmsAutosarKnowledgeHandler"
+
 import { WebFetchToolHandler } from "./handlers/WebFetchToolHandler"
 import { WebSearchToolHandler } from "./handlers/WebSearchToolHandler"
 import { WriteToFileToolHandler } from "./handlers/WriteToFileToolHandler"
@@ -71,6 +70,64 @@ export class SharedToolHandler implements IFullyManagedTool {
 }
 
 /**
+ * Lazy wrapper for the BMS AUTOSAR generate handler.
+ * Delays loading the heavy template/retrieval/embedding dependency graph
+ * until the tool is actually invoked.
+ */
+class LazyBmsAutosarGenerateHandler implements IFullyManagedTool {
+	readonly name = ClineDefaultTool.BMS_AUTOSAR_GENERATE
+	private handler?: IFullyManagedTool
+
+	private async load(): Promise<IFullyManagedTool> {
+		if (!this.handler) {
+			const { BmsAutosarGenerateHandler } = await import("./handlers/BmsAutosarGenerateHandler")
+			this.handler = new BmsAutosarGenerateHandler()
+		}
+		return this.handler
+	}
+
+	getDescription(block: ToolUse): string {
+		return `[${block.name} for '${block.params.component_name || block.params.config_file || "unknown"}']`
+	}
+
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		return (await this.load()).execute(config, block)
+	}
+
+	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+		return (await this.load()).handlePartialBlock(block, uiHelpers)
+	}
+}
+
+/**
+ * Lazy wrapper for the BMS AUTOSAR knowledge handler.
+ */
+class LazyBmsAutosarKnowledgeHandler implements IFullyManagedTool {
+	readonly name = ClineDefaultTool.BMS_AUTOSAR_KNOWLEDGE
+	private handler?: IFullyManagedTool
+
+	private async load(): Promise<IFullyManagedTool> {
+		if (!this.handler) {
+			const { BmsAutosarKnowledgeHandler } = await import("./handlers/BmsAutosarKnowledgeHandler")
+			this.handler = new BmsAutosarKnowledgeHandler()
+		}
+		return this.handler
+	}
+
+	getDescription(block: ToolUse): string {
+		return `[${block.name} action='${block.params.action || "unknown"}']`
+	}
+
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		return (await this.load()).execute(config, block)
+	}
+
+	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
+		return (await this.load()).handlePartialBlock(block, uiHelpers)
+	}
+}
+
+/**
  * Coordinates tool execution by routing to registered handlers.
  * Falls back to legacy switch for unregistered tools.
  */
@@ -108,8 +165,8 @@ export class ToolExecutorCoordinator {
 		[ClineDefaultTool.GENERATE_EXPLANATION]: (_v: ToolValidator) => new GenerateExplanationToolHandler(),
 		[ClineDefaultTool.USE_SKILL]: (_v: ToolValidator) => new UseSkillToolHandler(),
 		[ClineDefaultTool.USE_SUBAGENTS]: (_v: ToolValidator) => new UseSubagentsToolHandler(),
-		[ClineDefaultTool.BMS_AUTOSAR_GENERATE]: (_v: ToolValidator) => new BmsAutosarGenerateHandler(),
-		[ClineDefaultTool.BMS_AUTOSAR_KNOWLEDGE]: (_v: ToolValidator) => new BmsAutosarKnowledgeHandler(),
+		[ClineDefaultTool.BMS_AUTOSAR_GENERATE]: (_v: ToolValidator) => new LazyBmsAutosarGenerateHandler(),
+		[ClineDefaultTool.BMS_AUTOSAR_KNOWLEDGE]: (_v: ToolValidator) => new LazyBmsAutosarKnowledgeHandler(),
 	}
 
 	/**

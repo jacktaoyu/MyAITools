@@ -1,7 +1,7 @@
 import type { ApiConfiguration } from "@shared/api"
 import { createConcurrencyLimit } from "@utils/concurrency"
 import { createHash } from "crypto"
-import { type Config, Ollama } from "ollama"
+import type { Config } from "ollama"
 import { createOpenAIClient } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 
@@ -51,8 +51,9 @@ function getOllamaEmbeddingModel(apiConfiguration: ApiConfiguration): string {
 	return apiConfiguration.actModeOllamaModelId || apiConfiguration.planModeOllamaModelId || DEFAULT_OLLAMA_EMBEDDING_MODEL
 }
 
-function createOllamaClient(apiConfiguration: ApiConfiguration): Ollama | undefined {
+async function createOllamaClient(apiConfiguration: ApiConfiguration) {
 	try {
+		const { Ollama } = await import("ollama")
 		const clientOptions: Partial<Config> = {}
 		if (apiConfiguration.ollamaBaseUrl) {
 			clientOptions.host = apiConfiguration.ollamaBaseUrl
@@ -69,7 +70,7 @@ async function createOllamaEmbeddings(
 	apiConfiguration: ApiConfiguration,
 	model: string,
 ): Promise<(EmbeddingResult | undefined)[]> {
-	const client = createOllamaClient(apiConfiguration)
+	const client = await createOllamaClient(apiConfiguration)
 	if (!client) {
 		return texts.map(() => undefined)
 	}
@@ -115,6 +116,8 @@ export async function createEmbedding(text: string, options: EmbeddingOptions): 
 	}
 
 	const model = options.model ?? DEFAULT_EMBEDDING_MODEL
+	const startMs = Date.now()
+	Logger.log(`[BmsAutosarEmbeddingService] createEmbedding start length=${trimmed.length} model=${model}`)
 
 	if (canUseOpenAiEmbedding(options.apiConfiguration)) {
 		const contentHash = hashContent(trimmed)
@@ -131,11 +134,13 @@ export async function createEmbedding(text: string, options: EmbeddingOptions): 
 				encoding_format: "float",
 			})
 			const vector = response.data[0]?.embedding
+			Logger.log(`[BmsAutosarEmbeddingService] createEmbedding OpenAI done durationMs=${Date.now() - startMs}`)
 			if (!vector || !Array.isArray(vector)) {
 				return undefined
 			}
 			return { vector, model, contentHash }
-		} catch {
+		} catch (error) {
+			Logger.error(`[BmsAutosarEmbeddingService] createEmbedding OpenAI failed durationMs=${Date.now() - startMs}:`, error)
 			return undefined
 		}
 	}
@@ -143,9 +148,11 @@ export async function createEmbedding(text: string, options: EmbeddingOptions): 
 	if (canUseOllamaEmbedding(options.apiConfiguration)) {
 		const ollamaModel = getOllamaEmbeddingModel(options.apiConfiguration)
 		const results = await createOllamaEmbeddings([trimmed], options.apiConfiguration, ollamaModel)
+		Logger.log(`[BmsAutosarEmbeddingService] createEmbedding Ollama done durationMs=${Date.now() - startMs}`)
 		return results[0]
 	}
 
+	Logger.log(`[BmsAutosarEmbeddingService] createEmbedding skipped no provider`)
 	return undefined
 }
 
@@ -158,6 +165,9 @@ export async function createEmbeddings(texts: string[], options: EmbeddingOption
 	if (texts.length === 0) {
 		return []
 	}
+
+	const startMs = Date.now()
+	Logger.log(`[BmsAutosarEmbeddingService] createEmbeddings start count=${texts.length} model=${model}`)
 
 	if (canUseOpenAiEmbedding(options.apiConfiguration)) {
 		const indexed = texts.map((text, index) => ({ text: text.trim(), index })).filter(({ text }) => text.length > 0)
@@ -195,16 +205,21 @@ export async function createEmbeddings(texts: string[], options: EmbeddingOption
 					}
 				}
 			})
+			Logger.log(`[BmsAutosarEmbeddingService] createEmbeddings OpenAI done count=${indexed.length} durationMs=${Date.now() - startMs}`)
 			return results
-		} catch {
+		} catch (error) {
+			Logger.error(`[BmsAutosarEmbeddingService] createEmbeddings OpenAI failed durationMs=${Date.now() - startMs}:`, error)
 			return texts.map(() => undefined)
 		}
 	}
 
 	if (canUseOllamaEmbedding(options.apiConfiguration)) {
 		const ollamaModel = getOllamaEmbeddingModel(options.apiConfiguration)
-		return createOllamaEmbeddings(texts, options.apiConfiguration, ollamaModel)
+		const results = await createOllamaEmbeddings(texts, options.apiConfiguration, ollamaModel)
+		Logger.log(`[BmsAutosarEmbeddingService] createEmbeddings Ollama done count=${texts.length} durationMs=${Date.now() - startMs}`)
+		return results
 	}
 
+	Logger.log(`[BmsAutosarEmbeddingService] createEmbeddings skipped no provider`)
 	return texts.map(() => undefined)
 }

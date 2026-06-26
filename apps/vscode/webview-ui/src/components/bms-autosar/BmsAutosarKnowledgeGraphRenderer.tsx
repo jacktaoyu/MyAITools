@@ -151,33 +151,15 @@ const LAYOUT_OPTIONS: { label: string; value: string }[] = [
 	{ label: "Breadthfirst", value: "breadthfirst" },
 ]
 
-function parentPackageId(packagePath: string): string | undefined {
-	const parts = packagePath.split("/").filter(Boolean)
-	if (parts.length <= 1) return undefined
-	return `AR-PACKAGE:${parts.slice(0, -1).join("/")}`
-}
-
 function buildCytoscapeElements(
 	nodes: Array<BmsAutosarKnowledgeGraphNode | BmsAutosarExternalNode>,
 	edges: Array<BmsAutosarKnowledgeGraphEdge | BmsAutosarExternalEdge>,
 ) {
-	const nodeIdSet = new Set(nodes.map((n) => n.id))
 	const nodeEles = nodes.map((node) => {
-		let parentId: string | undefined
-		const packagePath = "packagePath" in node ? node.packagePath : undefined
-		if (node.type === "AR-PACKAGE" && packagePath) {
-			parentId = parentPackageId(packagePath)
-		} else if (packagePath) {
-			parentId = `AR-PACKAGE:${packagePath}`
-		}
-		if (parentId && !nodeIdSet.has(parentId)) {
-			parentId = undefined
-		}
 		const isExternal = !("packagePath" in node)
 		return {
 			data: {
 				id: node.id,
-				parent: parentId,
 				name: node.name,
 				label: truncateLabel(node.name),
 				fullLabel: node.name,
@@ -218,7 +200,7 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 	const [searchTerm, setSearchTerm] = useState("")
 	const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set())
 	const [hiddenRelations, setHiddenRelations] = useState<Set<string>>(new Set())
-	const [layoutName, setLayoutName] = useState("cose-bilkent")
+	const [layoutName, setLayoutName] = useState("dagre")
 	const [layoutRunning, setLayoutRunning] = useState(false)
 	const [externalNodes, setExternalNodes] = useState<BmsAutosarExternalNode[]>([])
 	const [externalEdges, setExternalEdges] = useState<BmsAutosarExternalEdge[]>([])
@@ -292,10 +274,10 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				{
 					selector: "node",
 					style: {
-						"background-color": (node: cytoscape.NodeSingular) => node.data("color") as string,
-						width: (node: cytoscape.NodeSingular) => node.data("size") as number,
-						height: (node: cytoscape.NodeSingular) => node.data("size") as number,
-						label: (node: cytoscape.NodeSingular) => node.data("label") as string,
+						"background-color": "data(color)",
+						width: "data(size)",
+						height: "data(size)",
+						label: "data(label)",
 						color: textColor,
 						"font-size": "10px",
 						"text-valign": "bottom",
@@ -395,7 +377,10 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		if (!cy) return
 
 		cy.elements().remove()
-		if (filteredNodes.length === 0) return
+		if (filteredNodes.length === 0) {
+			setLayoutRunning(false)
+			return
+		}
 
 		const elements = buildCytoscapeElements(filteredNodes, filteredEdges)
 		cy.add(elements)
@@ -407,45 +392,82 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 		}
 
 		setLayoutRunning(true)
-		let layout: cytoscape.Layouts
-		if (layoutName === "cose-bilkent") {
-			layout = cy.layout({
-				name: "cose-bilkent",
-				animate: false,
-				randomize: true,
-				componentSpacing: 80,
-				nodeRepulsion: 400000,
-				edgeElasticity: 0.45,
-				nestingFactor: 0.1,
-				gravity: 0.25,
-				numIter: 2500,
-				tile: true,
-				tilingPaddingVertical: 12,
-				tilingPaddingHorizontal: 12,
-				gravityRangeCompound: 1.5,
-				gravityCompound: 1.0,
-				gravityRange: 3.8,
-				idealEdgeLength: 70,
-			} as cytoscape.LayoutOptions)
-		} else if (layoutName === "dagre") {
-			layout = cy.layout({
-				name: "dagre",
-				animate: false,
-				rankDir: "LR",
-				nodeSep: 50,
-				edgeSep: 12,
-				rankSep: 90,
-				padding: 20,
-			} as cytoscape.LayoutOptions)
-		} else {
-			layout = cy.layout({ name: layoutName } as cytoscape.LayoutOptions)
-		}
+		let rafId: number
+		let aborted = false
 
-		layout.one("layoutstop", () => {
+		const finishLayout = (usedLayoutName: string) => () => {
+			if (aborted) return
+			cy.resize()
+			const bbox = cy.elements().boundingBox()
+			const bboxArea = bbox.w * bbox.h
+			console.log(
+				`[ARXML Graph] layout=${usedLayoutName} nodes=${filteredNodes.length} edges=${filteredEdges.length} bbox=${bbox.w.toFixed(1)}x${bbox.h.toFixed(1)} area=${bboxArea.toFixed(1)}`,
+			)
+			if (bboxArea < 10000 || bbox.w < 50 || bbox.h < 50) {
+				console.warn("[ARXML Graph] layout collapsed, falling back to grid")
+				const fallback = cy.layout({ name: "grid", fit: true, padding: 40 } as cytoscape.LayoutOptions)
+				fallback.one("layoutstop", () => {
+					cy.fit(undefined, 40)
+					setLayoutRunning(false)
+				})
+				fallback.run()
+				return
+			}
 			cy.fit(undefined, 40)
 			setLayoutRunning(false)
-		})
-		layout.run()
+		}
+
+		const runLayout = () => {
+			if (aborted) return
+			cy.resize()
+
+			let layout: cytoscape.Layouts
+			if (layoutName === "cose-bilkent") {
+				layout = cy.layout({
+					name: "cose-bilkent",
+					animate: false,
+					randomize: true,
+					componentSpacing: 100,
+					nodeRepulsion: 450000,
+					edgeElasticity: 0.45,
+					nestingFactor: 0.1,
+					gravity: 0.25,
+					numIter: 2500,
+					tile: false,
+					tilingPaddingVertical: 16,
+					tilingPaddingHorizontal: 16,
+					gravityRangeCompound: 1.5,
+					gravityCompound: 1.0,
+					gravityRange: 3.8,
+					idealEdgeLength: 80,
+					nodeDimensionsIncludeLabels: false,
+					fit: false,
+				} as cytoscape.LayoutOptions)
+			} else if (layoutName === "dagre") {
+				layout = cy.layout({
+					name: "dagre",
+					animate: false,
+					rankDir: "LR",
+					nodeSep: 50,
+					edgeSep: 12,
+					rankSep: 90,
+					padding: 20,
+					fit: false,
+				} as cytoscape.LayoutOptions)
+			} else {
+				layout = cy.layout({ name: layoutName, fit: false } as cytoscape.LayoutOptions)
+			}
+
+			layout.one("layoutstop", finishLayout(layoutName))
+			layout.run()
+		}
+
+		rafId = requestAnimationFrame(runLayout)
+
+		return () => {
+			aborted = true
+			cancelAnimationFrame(rafId)
+		}
 	}, [filteredNodes, filteredEdges, filteredNodeIds, layoutName, selectedNode, textColor])
 
 	// Resize when dimensions change.
@@ -705,7 +727,13 @@ export const BmsAutosarKnowledgeGraphRenderer: React.FC<BmsAutosarKnowledgeGraph
 				<div
 					ref={containerRef}
 					className="w-full h-full"
-					style={{ width: "100%", height: "100%", visibility: loading || layoutRunning ? "hidden" : "visible" }}
+					style={{
+						width: "100%",
+						height: "100%",
+						opacity: loading || layoutRunning ? 0 : 1,
+						pointerEvents: loading || layoutRunning ? "none" : "auto",
+						transition: "opacity 150ms ease",
+					}}
 				/>
 				{hoveredNode && (
 					<div className="absolute bottom-2 left-2 text-xs px-2 py-1 rounded border bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] border-[var(--vscode-panel-border)] max-w-md truncate">

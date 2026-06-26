@@ -6,11 +6,6 @@ import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
 import { Logger } from "@/shared/services/Logger"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
-import { sendBmsAutosarCompileEvent } from "./core/controller/ui/subscribeToBmsAutosarCompile"
-import { sendBmsAutosarDashboardEvent } from "./core/controller/ui/subscribeToBmsAutosarDashboard"
-import { sendBmsAutosarGeneratorEvent } from "./core/controller/ui/subscribeToBmsAutosarGenerator"
-import { sendBmsAutosarKnowledgeGraphEvent } from "./core/controller/ui/subscribeToBmsAutosarKnowledgeGraph"
-import { sendBmsAutosarQualityReportEvent } from "./core/controller/ui/subscribeToBmsAutosarQualityReport"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
 import { sendHistoryButtonClickedEvent } from "./core/controller/ui/subscribeToHistoryButtonClicked"
 import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpButtonClicked"
@@ -422,6 +417,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				webviewView.show(true)
 			}
 			sendShowWebviewEvent(false)
+			const { sendBmsAutosarQualityReportEvent } = await import("./core/controller/ui/subscribeToBmsAutosarQualityReport")
 			await sendBmsAutosarQualityReportEvent()
 			telemetryService.captureButtonClick("command_bmsAutosarQualityReport", webview.controller?.task?.ulid)
 		}),
@@ -435,6 +431,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				webviewView.show(true)
 			}
 			sendShowWebviewEvent(false)
+			const { sendBmsAutosarKnowledgeGraphEvent } = await import("./core/controller/ui/subscribeToBmsAutosarKnowledgeGraph")
 			await sendBmsAutosarKnowledgeGraphEvent()
 			telemetryService.captureButtonClick("command_bmsAutosarKnowledgeGraph", webview.controller?.task?.ulid)
 		}),
@@ -448,6 +445,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				webviewView.show(true)
 			}
 			sendShowWebviewEvent(false)
+			const { sendBmsAutosarCompileEvent } = await import("./core/controller/ui/subscribeToBmsAutosarCompile")
 			await sendBmsAutosarCompileEvent()
 			telemetryService.captureButtonClick("command_bmsAutosarOpenCompile", webview.controller?.task?.ulid)
 		}),
@@ -461,6 +459,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				webviewView.show(true)
 			}
 			sendShowWebviewEvent(false)
+			const { sendBmsAutosarGeneratorEvent } = await import("./core/controller/ui/subscribeToBmsAutosarGenerator")
 			await sendBmsAutosarGeneratorEvent()
 			telemetryService.captureButtonClick("command_bmsAutosarOpenGenerator", webview.controller?.task?.ulid)
 		}),
@@ -474,6 +473,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				webviewView.show(true)
 			}
 			sendShowWebviewEvent(false)
+			const { sendBmsAutosarDashboardEvent } = await import("./core/controller/ui/subscribeToBmsAutosarDashboard")
 			await sendBmsAutosarDashboardEvent()
 			telemetryService.captureButtonClick("command_bmsAutosarDashboard", webview.controller?.task?.ulid)
 		}),

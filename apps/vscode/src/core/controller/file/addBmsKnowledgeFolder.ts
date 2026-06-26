@@ -16,7 +16,8 @@ import {
 	saveBmsKnowledgeEntries,
 } from "./bmsKnowledgeStorage";
 import type { BmsAutosarKnowledgeEntry } from "@core/task/tools/handlers/bms-autosar/BmsAutosarKnowledgeTypes";
-import { warmBmsAutosarVectorCache } from "@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex";
+import type { warmBmsAutosarVectorCache as WarmBmsAutosarVectorCacheFn } from "@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex";
+import type { ApiConfiguration } from "@shared/api";
 
 interface FileExtractionResult {
 	relativePath: string;
@@ -57,6 +58,16 @@ function deriveTags(relativePath: string, userTag?: string): string[] {
 		tags.add(userTag);
 	}
 	return Array.from(tags);
+}
+
+async function warmBmsAutosarVectorCacheIfNeeded(
+	entries: BmsAutosarKnowledgeEntry[],
+	apiConfiguration: ApiConfiguration,
+): Promise<void> {
+	const { warmBmsAutosarVectorCache } = (await import(
+		"@core/task/tools/handlers/bms-autosar/BmsAutosarVectorIndex"
+	)) as { warmBmsAutosarVectorCache: typeof WarmBmsAutosarVectorCacheFn };
+	return warmBmsAutosarVectorCache(entries, apiConfiguration);
 }
 
 /**
@@ -186,7 +197,7 @@ export async function addBmsKnowledgeFolder(
 		removedSourcePaths,
 	});
 
-	warmBmsAutosarVectorCache(
+	warmBmsAutosarVectorCacheIfNeeded(
 		newEntries,
 		_controller.stateManager.getApiConfiguration(),
 	).catch(() => {

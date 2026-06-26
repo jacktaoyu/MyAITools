@@ -60,7 +60,7 @@ export class ToolExecutor {
 		// Core Services & Managers
 		private taskState: TaskState,
 		private messageStateHandler: MessageStateHandler,
-		private api: ApiHandler,
+		private getApi: () => ApiHandler,
 		private urlContentFetcher: UrlContentFetcher,
 		private browserSession: BrowserSession,
 		private diffViewProvider: DiffViewProvider,
@@ -148,7 +148,7 @@ export class ToolExecutor {
 			isMultiRootEnabled: this.isMultiRootEnabled,
 			taskState: this.taskState,
 			messageState: this.messageStateHandler,
-			api: this.api,
+			api: this.getApi(),
 			autoApprovalSettings: this.stateManager.getGlobalSettingsKey("autoApprovalSettings"),
 			autoApprover: this.autoApprover,
 			browserSettings: this.stateManager.getGlobalSettingsKey("browserSettings"),
@@ -218,8 +218,9 @@ export class ToolExecutor {
 	 */
 	public async applyLatestBrowserSettings() {
 		await this.browserSession.dispose()
-		const apiHandlerModel = this.api.getModel()
-		const useWebp = this.api ? !modelDoesntSupportWebp(apiHandlerModel) : true
+		const api = this.getApi()
+		const apiHandlerModel = api.getModel()
+		const useWebp = api ? !modelDoesntSupportWebp(apiHandlerModel) : true
 		this.browserSession = new BrowserSession(this.stateManager, useWebp)
 		return this.browserSession
 	}
@@ -278,7 +279,7 @@ export class ToolExecutor {
 	 */
 	private isParallelToolCallingEnabled(): boolean {
 		const enableParallelSetting = this.stateManager.getGlobalSettingsKey("enableParallelToolCalling")
-		const model = this.api.getModel()
+		const model = this.getApi().getModel()
 		const apiConfig = this.stateManager.getApiConfiguration()
 		const mode = this.stateManager.getGlobalSettingsKey("mode")
 		const providerId = (mode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
@@ -486,7 +487,7 @@ export class ToolExecutor {
 			messageStateHandler: this.messageStateHandler,
 			taskId: this.taskId,
 			hooksEnabled,
-			model: getHookModelContext(this.api, this.stateManager),
+			model: getHookModelContext(this.getApi(), this.stateManager),
 			toolName: block.name,
 		})
 

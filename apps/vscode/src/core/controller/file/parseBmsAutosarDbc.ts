@@ -4,7 +4,7 @@ import {
 	BmsAutosarExternalGraph,
 	BmsAutosarExternalNode,
 } from "@shared/proto/cline/file";
-import { parseDbc } from "@core/task/tools/handlers/bms-autosar/BmsAutosarDbcParser";
+import type { BmsAutosarDbc } from "@core/task/tools/handlers/bms-autosar/BmsAutosarDbcParser";
 import type { Controller } from "..";
 
 /**
@@ -20,7 +20,10 @@ export async function parseBmsAutosarDbc(
 	}
 
 	const content = await fs.readFile(filePath, "utf-8");
-	const dbc = parseDbc(content);
+	const { parseDbc } = await import(
+		"@core/task/tools/handlers/bms-autosar/BmsAutosarDbcParser"
+	);
+	const dbc: BmsAutosarDbc = parseDbc(content);
 	const nodes: BmsAutosarExternalNode[] = [];
 
 	for (const message of dbc.messages) {
